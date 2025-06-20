@@ -1,0 +1,326 @@
+"""
+Main game engine for Dale.
+"""
+
+import pygame
+import sys
+from typing import Dict, Any, Optional
+
+from .settings import *
+from .game_state import GameStateManager, GameState
+from ..entities.player import Player
+from ..entities.enemies import EnemyManager
+from ..entities.towers import TowerManager
+from ..entities.allies import AllyManager
+from ..entities.projectiles import ProjectileManager
+from ..ui.hud import HUD
+from ..ui.menus import MainMenu, GameOverMenu
+from ..utils.sprites import SpriteManager
+from ..backend.database import GameDatabase
+
+class GameEngine:
+    """Main game engine class."""
+    
+    def __init__(self):
+        """Initialize the game engine."""
+        pygame.init()
+        
+        # Set up display
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("Dale")
+        
+        # Set up clock for FPS control
+        self.clock = pygame.time.Clock()
+        
+        # Initialize game systems
+        self.state_manager = GameStateManager()
+        self.sprite_manager = SpriteManager()
+        self.database = GameDatabase()
+        
+        # Initialize game objects (will be set in _initialize_game_objects)
+        self.player: Optional[Player] = None
+        self.enemy_manager: Optional[EnemyManager] = None
+        self.tower_manager: Optional[TowerManager] = None
+        self.ally_manager: Optional[AllyManager] = None
+        self.projectile_manager: Optional[ProjectileManager] = None
+        
+        # Initialize UI (will be set in _initialize_game_objects)
+        self.hud: Optional[HUD] = None
+        self.main_menu: Optional[MainMenu] = None
+        self.game_over_menu: Optional[GameOverMenu] = None
+        
+        # Game timing
+        self.last_wave_time = 0.0
+        self.wave_timer = 0.0
+        
+        # Running flag
+        self.running = True
+        
+        self._initialize_game_objects()
+        
+    def _initialize_game_objects(self):
+        """Initialize all game objects."""
+        # Initialize player
+        self.player = Player(
+            self.state_manager.player_data['x'],
+            self.state_manager.player_data['y'],
+            self.sprite_manager
+        )
+        
+        # Initialize managers
+        self.enemy_manager = EnemyManager(self.sprite_manager, self.state_manager)
+        self.tower_manager = TowerManager(self.sprite_manager, self.state_manager)
+        self.ally_manager = AllyManager(self.sprite_manager, self.state_manager)
+        self.projectile_manager = ProjectileManager(self.sprite_manager)
+        
+        # Initialize UI
+        self.hud = HUD(self.state_manager)
+        self.main_menu = MainMenu()
+        self.game_over_menu = GameOverMenu()
+        
+    def run(self):
+        """Main game loop."""
+        while self.running:
+            dt = self.clock.tick(FPS) / 1000.0  # Delta time in seconds
+            
+            self._handle_events()
+            self._update(dt)
+            self._render()
+            
+        self._cleanup()
+        
+    def _handle_events(self):
+        """Handle pygame events."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                
+            # Handle different game states
+            if self.state_manager.is_state(GameState.MENU):
+                self._handle_menu_events(event)
+            elif self.state_manager.is_state(GameState.PLAYING):
+                self._handle_game_events(event)
+            elif self.state_manager.is_state(GameState.GAME_OVER):
+                self._handle_game_over_events(event)
+                
+    def _handle_menu_events(self, event):
+        """Handle events in menu state."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                self._start_new_game()
+            elif event.key == pygame.K_ESCAPE:
+                self.running = False
+                
+    def _handle_game_events(self, event):
+        """Handle events during gameplay."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.state_manager.change_state(GameState.PAUSED)
+            elif event.key in KEY_SUMMON_ALLY:
+                self._try_summon_ally()
+            elif event.key in KEY_BUILD_TOWER:
+                self._try_build_tower()
+                
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left click
+                self._handle_left_click(event.pos)
+                
+    def _handle_game_over_events(self, event):
+        """Handle events in game over state."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                self._start_new_game()
+            elif event.key == pygame.K_ESCAPE:
+                self.state_manager.change_state(GameState.MENU)
+                
+    def _handle_left_click(self, pos):
+        """Handle left mouse click during gameplay."""
+        # Check if clicking on UI elements first
+        if self.hud.handle_click(pos):  # type: ignore
+            return
+            
+        # Otherwise, try to build tower at position
+        grid_x = pos[0] // TILE_SIZE
+        grid_y = pos[1] // TILE_SIZE
+        self.tower_manager.try_build_tower(grid_x, grid_y)  # type: ignore
+        
+    def _try_summon_ally(self):
+        """Try to summon an ally near the player."""
+        if self.state_manager.spend_essence(ALLY_COST):
+            self.ally_manager.spawn_ally_near_player(self.player.x, self.player.y)  # type: ignore
+            self.state_manager.game_data['allies_summoned'] += 1
+            
+    def _try_build_tower(self):
+        """Try to build a tower near the player."""
+        if self.state_manager.spend_essence(ARROW_TOWER_COST):
+            grid_x = int(self.player.x // TILE_SIZE)  # type: ignore
+            grid_y = int(self.player.y // TILE_SIZE)  # type: ignore
+            if self.tower_manager.try_build_tower(grid_x, grid_y):  # type: ignore
+                self.state_manager.game_data['towers_built'] += 1
+            else:
+                # Refund essence if tower couldn't be built
+                self.state_manager.add_essence(ARROW_TOWER_COST)
+                
+    def _update(self, dt):
+        """Update game logic."""
+        if self.state_manager.is_state(GameState.PLAYING):
+            self._update_gameplay(dt)
+        elif self.state_manager.is_state(GameState.MENU):
+            self.main_menu.update(dt)  # type: ignore
+        elif self.state_manager.is_state(GameState.GAME_OVER):
+            self.game_over_menu.update(dt)  # type: ignore
+            
+    def _update_gameplay(self, dt):
+        """Update gameplay logic."""
+        # Update game timer
+        self.state_manager.game_data['time_elapsed'] += dt
+        
+        # Handle input for player movement
+        keys = pygame.key.get_pressed()
+        self.player.handle_input(keys, dt)  # type: ignore
+        
+        # Update entities
+        self.player.update(dt)  # type: ignore
+        self.enemy_manager.update(dt, self.state_manager.castle_data)  # type: ignore
+        self.tower_manager.update(dt)  # type: ignore
+        self.ally_manager.update(dt)  # type: ignore
+        self.projectile_manager.update(dt, self.state_manager.entities['projectiles'])  # type: ignore
+        
+        # Handle combat
+        self._handle_combat()
+        
+        # Handle wave spawning
+        self._handle_wave_spawning(dt)
+        
+        # Check win/lose conditions
+        self._check_game_conditions()
+        
+    def _handle_combat(self):
+        """Handle combat between entities."""
+        # Tower attacks
+        enemies = self.state_manager.entities['enemies']
+        towers = self.state_manager.entities['towers']
+        
+        for tower in towers:
+            target = tower.find_target(enemies)
+            if target and tower.can_fire():
+                projectile = tower.fire_at(target)
+                if projectile:
+                    self.state_manager.entities['projectiles'].append(projectile)
+                    
+        # Ally attacks
+        allies = self.state_manager.entities['allies']
+        for ally in allies:
+            target = ally.find_target(enemies)
+            if target and ally.can_attack():
+                ally.attack(target)
+                
+        # Projectile hits
+        projectiles = self.state_manager.entities['projectiles']
+        for projectile in projectiles[:]:  # Use slice copy for safe iteration
+            hit_enemy = projectile.check_collision(enemies)
+            if hit_enemy:
+                hit_enemy.take_damage(projectile.damage)
+                projectiles.remove(projectile)
+                
+                # Check if enemy is dead
+                if hit_enemy.health <= 0:
+                    enemies.remove(hit_enemy)
+                    self._on_enemy_killed(hit_enemy)
+                    
+    def _handle_wave_spawning(self, dt):
+        """Handle spawning of enemy waves."""
+        self.wave_timer += dt
+        
+        # Spawn first wave immediately, then use delay for subsequent waves
+        if len(self.state_manager.entities['enemies']) == 0:
+            if self.state_manager.game_data['current_wave'] == 1 or (self.wave_timer - self.last_wave_time) >= WAVE_DELAY:
+                self._spawn_wave()
+                self.last_wave_time = self.wave_timer
+                
+    def _spawn_wave(self):
+        """Spawn a new wave of enemies."""
+        wave_num = self.state_manager.game_data['current_wave']
+        enemy_count = int(WAVE_ENEMY_COUNT_BASE * (WAVE_ENEMY_COUNT_MULTIPLIER ** (wave_num - 1)))
+        
+        self.enemy_manager.spawn_wave(enemy_count)  # type: ignore
+        self.state_manager.next_wave()
+        
+    def _on_enemy_killed(self, enemy):
+        """Handle when an enemy is killed."""
+        self.state_manager.game_data['enemies_killed'] += 1
+        self.state_manager.add_score(10 * enemy.max_health)
+        
+        # Drop essence
+        essence_amount = ESSENCE_PER_ENEMY
+        self.state_manager.add_essence(essence_amount)
+        
+    def _check_game_conditions(self):
+        """Check for win/lose conditions."""
+        if self.state_manager.is_castle_destroyed():
+            self._game_over()
+            
+    def _game_over(self):
+        """Handle game over."""
+        self.state_manager.change_state(GameState.GAME_OVER)
+        # Save game data to backend
+        self.database.save_game_session(self.state_manager.get_save_data())
+        
+    def _start_new_game(self):
+        """Start a new game."""
+        self.state_manager.reset_game()
+        self.state_manager.change_state(GameState.PLAYING)
+        self.last_wave_time = 0.0
+        self.wave_timer = 0.0
+        
+        # Reinitialize game objects with fresh state
+        self._initialize_game_objects()
+        
+    def _render(self):
+        """Render the game."""
+        self.screen.fill(DARK_GREEN)  # Background color
+        
+        if self.state_manager.is_state(GameState.MENU):
+            self.main_menu.render(self.screen)  # type: ignore
+        elif self.state_manager.is_state(GameState.PLAYING):
+            self._render_gameplay()
+        elif self.state_manager.is_state(GameState.GAME_OVER):
+            self._render_gameplay()  # Show game state
+            self.game_over_menu.render(self.screen)  # type: ignore
+            
+        pygame.display.flip()
+        
+    def _render_gameplay(self):
+        """Render gameplay elements."""
+        # Render castle
+        castle_rect = pygame.Rect(
+            self.state_manager.castle_data['x'] - CASTLE_SIZE//2,
+            self.state_manager.castle_data['y'] - CASTLE_SIZE//2,
+            CASTLE_SIZE,
+            CASTLE_SIZE
+        )
+        pygame.draw.rect(self.screen, BROWN, castle_rect)
+        
+        # Render entities
+        for tower in self.state_manager.entities['towers']:
+            tower.render(self.screen)
+            
+        for enemy in self.state_manager.entities['enemies']:
+            enemy.render(self.screen)
+            
+        for ally in self.state_manager.entities['allies']:
+            ally.render(self.screen)
+            
+        for projectile in self.state_manager.entities['projectiles']:
+            projectile.render(self.screen)
+            
+        # Render player
+        self.player.render(self.screen)  # type: ignore
+        
+        # Render UI
+        self.hud.render(self.screen)  # type: ignore
+        
+    def _cleanup(self):
+        """Clean up resources."""
+        pygame.quit()
+        sys.exit() 
