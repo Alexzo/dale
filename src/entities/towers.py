@@ -144,14 +144,21 @@ class TowerManager:
         if grid_y < 0 or grid_y >= (GRID_HEIGHT - HUD_HEIGHT // TILE_SIZE):
             return False
             
-        # Check if too close to castle
+        # Check if too close to castle (updated for new castle size)
         castle_data = self.state_manager.castle_data
-        castle_grid_x = int(castle_data['x'] // TILE_SIZE)
-        castle_grid_y = int(castle_data['y'] // TILE_SIZE)
+        castle_left = castle_data['x'] - CASTLE_WIDTH//2
+        castle_right = castle_data['x'] + CASTLE_WIDTH//2
+        castle_top = castle_data['y'] - CASTLE_HEIGHT//2
+        castle_bottom = castle_data['y'] + CASTLE_HEIGHT//2
         
-        castle_size_tiles = 2  # Castle takes 2x2 tiles
-        if (abs(grid_x - castle_grid_x) <= castle_size_tiles and 
-            abs(grid_y - castle_grid_y) <= castle_size_tiles):
+        # Convert tower position to world coordinates
+        tower_x = grid_x * TILE_SIZE + TILE_SIZE // 2
+        tower_y = grid_y * TILE_SIZE + TILE_SIZE // 2
+        
+        # Add buffer zone around castle
+        buffer = TILE_SIZE * 2  # 2 tile buffer
+        if (tower_x >= castle_left - buffer and tower_x <= castle_right + buffer and
+            tower_y >= castle_top - buffer and tower_y <= castle_bottom + buffer):
             return False
             
         return True

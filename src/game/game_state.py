@@ -4,6 +4,7 @@ Game state management system.
 
 from enum import Enum
 from typing import Dict, Any
+from .settings import CASTLE_X, CASTLE_Y, CASTLE_WIDTH, CASTLE_HEIGHT
 
 class GameState(Enum):
     """Game state enumeration."""
@@ -31,8 +32,8 @@ class GameStateManager:
         self.castle_data = {
             'health': 500,
             'max_health': 500,
-            'x': 640,  # Center of screen
-            'y': 360
+            'x': CASTLE_X,  # Use new castle position
+            'y': CASTLE_Y
         }
         
         self.game_data = {
@@ -77,8 +78,8 @@ class GameStateManager:
         self.castle_data = {
             'health': 500,
             'max_health': 500,
-            'x': 640,
-            'y': 360
+            'x': CASTLE_X,
+            'y': CASTLE_Y
         }
         
         self.game_data = {

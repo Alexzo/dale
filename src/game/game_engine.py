@@ -292,14 +292,59 @@ class GameEngine:
         
     def _render_gameplay(self):
         """Render gameplay elements."""
-        # Render castle
+        # Render enemy path first (so it appears under other elements)
+        self._render_enemy_path()
+        
+        # Render castle (now much larger)
         castle_rect = pygame.Rect(
-            self.state_manager.castle_data['x'] - CASTLE_SIZE//2,
-            self.state_manager.castle_data['y'] - CASTLE_SIZE//2,
-            CASTLE_SIZE,
-            CASTLE_SIZE
+            self.state_manager.castle_data['x'] - CASTLE_WIDTH//2,
+            self.state_manager.castle_data['y'] - CASTLE_HEIGHT//2,
+            CASTLE_WIDTH,
+            CASTLE_HEIGHT
         )
+        
+        # Draw main castle walls
         pygame.draw.rect(self.screen, BROWN, castle_rect)
+        
+        # Add castle details
+        # Main keep (center tower)
+        keep_width = CASTLE_WIDTH // 3
+        keep_height = CASTLE_HEIGHT // 2
+        keep_rect = pygame.Rect(
+            castle_rect.centerx - keep_width//2,
+            castle_rect.centery - keep_height//2,
+            keep_width,
+            keep_height
+        )
+        pygame.draw.rect(self.screen, (101, 67, 33), keep_rect)  # Darker brown
+        
+        # Side towers
+        tower_width = CASTLE_WIDTH // 6
+        tower_height = CASTLE_HEIGHT // 3
+        
+        # Left tower
+        left_tower = pygame.Rect(
+            castle_rect.left + 10,
+            castle_rect.centery - tower_height//2,
+            tower_width,
+            tower_height
+        )
+        pygame.draw.rect(self.screen, (101, 67, 33), left_tower)
+        
+        # Right tower  
+        right_tower = pygame.Rect(
+            castle_rect.right - tower_width - 10,
+            castle_rect.centery - tower_height//2,
+            tower_width,
+            tower_height
+        )
+        pygame.draw.rect(self.screen, (101, 67, 33), right_tower)
+        
+        # Castle outline
+        pygame.draw.rect(self.screen, BLACK, castle_rect, 3)
+        pygame.draw.rect(self.screen, BLACK, keep_rect, 2)
+        pygame.draw.rect(self.screen, BLACK, left_tower, 2)
+        pygame.draw.rect(self.screen, BLACK, right_tower, 2)
         
         # Render entities
         for tower in self.state_manager.entities['towers']:
@@ -319,6 +364,36 @@ class GameEngine:
         
         # Render UI
         self.hud.render(self.screen)  # type: ignore
+        
+    def _render_enemy_path(self):
+        """Render the enemy path on the game map."""
+        if len(ENEMY_PATH) < 2:
+            return
+            
+        # Draw path lines connecting waypoints
+        for i in range(len(ENEMY_PATH) - 1):
+            start_pos = ENEMY_PATH[i]
+            end_pos = ENEMY_PATH[i + 1]
+            
+            # Draw thick yellow line for the path
+            pygame.draw.line(self.screen, (255, 255, 0), start_pos, end_pos, PATH_WIDTH)
+            # Draw thinner dark outline for better visibility
+            pygame.draw.line(self.screen, (180, 180, 0), start_pos, end_pos, 2)
+            
+        # Draw waypoint circles
+        for i, waypoint in enumerate(ENEMY_PATH):
+            if i == 0:
+                # Start point - green circle
+                pygame.draw.circle(self.screen, (0, 255, 0), waypoint, WAYPOINT_RADIUS + 2)
+                pygame.draw.circle(self.screen, (0, 180, 0), waypoint, WAYPOINT_RADIUS + 2, 2)
+            elif i == len(ENEMY_PATH) - 1:
+                # End point (castle) - red circle
+                pygame.draw.circle(self.screen, (255, 0, 0), waypoint, WAYPOINT_RADIUS + 2)
+                pygame.draw.circle(self.screen, (180, 0, 0), waypoint, WAYPOINT_RADIUS + 2, 2)
+            else:
+                # Regular waypoints - yellow circles
+                pygame.draw.circle(self.screen, (255, 255, 0), waypoint, WAYPOINT_RADIUS)
+                pygame.draw.circle(self.screen, (180, 180, 0), waypoint, WAYPOINT_RADIUS, 2)
         
     def _cleanup(self):
         """Clean up resources."""

@@ -31,6 +31,10 @@ class Enemy:
         self.velocity_x = 0.0
         self.velocity_y = 0.0
         
+        # Waypoint system
+        self.current_waypoint = 0
+        self.path = ENEMY_PATH.copy()  # Copy the global path
+        
         # Sprite
         self.sprite = sprite_manager.get_sprite('enemy')
         if not self.sprite:
@@ -46,9 +50,15 @@ class Enemy:
         self.attack_rate = 1.0  # attacks per second
         
     def set_target(self, target_x: float, target_y: float):
-        """Set the target position (usually the castle)."""
-        self.target_x = target_x
-        self.target_y = target_y
+        """Set the target position (first waypoint)."""
+        # Start with the first waypoint instead of direct castle targeting
+        if self.path and len(self.path) > 0:
+            self.target_x = self.path[0][0]
+            self.target_y = self.path[0][1]
+        else:
+            # Fallback to direct targeting if no path
+            self.target_x = target_x
+            self.target_y = target_y
         
     def update(self, dt: float):
         """Update enemy state."""
@@ -64,11 +74,19 @@ class Enemy:
             self.attack_cooldown -= dt
             
     def _move_towards_target(self, dt: float):
-        """Move towards the target position."""
-        # Calculate direction to target
+        """Move towards the current waypoint."""
+        # Calculate direction to current target
         dx = self.target_x - self.x
         dy = self.target_y - self.y
         distance = math.sqrt(dx**2 + dy**2)
+        
+        # Check if we've reached the current waypoint
+        if distance < 20:  # Waypoint reached threshold
+            self._advance_to_next_waypoint()
+            # Recalculate direction to new target
+            dx = self.target_x - self.x
+            dy = self.target_y - self.y
+            distance = math.sqrt(dx**2 + dy**2)
         
         if distance > 0:
             # Normalize direction and apply speed
@@ -78,6 +96,15 @@ class Enemy:
             # Update position
             self.x += self.velocity_x * dt
             self.y += self.velocity_y * dt
+            
+    def _advance_to_next_waypoint(self):
+        """Move to the next waypoint in the path."""
+        self.current_waypoint += 1
+        if self.current_waypoint < len(self.path):
+            # Set next waypoint as target
+            self.target_x = self.path[self.current_waypoint][0]
+            self.target_y = self.path[self.current_waypoint][1]
+        # If we've reached the end of the path, keep the last target (castle)
             
     def can_attack(self) -> bool:
         """Check if enemy can attack."""
@@ -107,6 +134,12 @@ class Enemy:
     def is_at_target(self, threshold: float = 32.0) -> bool:
         """Check if enemy has reached the target."""
         return self.get_distance_to_target() <= threshold
+        
+    def has_completed_path(self, threshold: float = 32.0) -> bool:
+        """Check if enemy has completed the entire path and reached the castle."""
+        # Only return True if we've gone through all waypoints and reached the final position
+        return (self.current_waypoint >= len(self.path) - 1 and 
+                self.get_distance_to_target() <= threshold)
         
     def render(self, screen: pygame.Surface):
         """Render the enemy."""
@@ -141,25 +174,20 @@ class EnemyManager:
         self.sprite_manager = sprite_manager
         self.state_manager = state_manager
         
-        # Spawn points (edges of the screen)
-        self.spawn_points = [
-            (0, SCREEN_HEIGHT // 2),  # Left edge
-            (SCREEN_WIDTH, SCREEN_HEIGHT // 2),  # Right edge
-            (SCREEN_WIDTH // 2, 0),  # Top edge
-            (SCREEN_WIDTH // 2, SCREEN_HEIGHT - HUD_HEIGHT)  # Bottom edge
-        ]
+        # Spawn point at the beginning of the enemy path
+        self.spawn_point = ENEMY_PATH[0] if ENEMY_PATH else (50, 100)
         
     def spawn_wave(self, enemy_count: int):
         """Spawn a wave of enemies."""
         enemies = self.state_manager.entities['enemies']
         
         for i in range(enemy_count):
-            # Choose random spawn point
-            spawn_x, spawn_y = random.choice(self.spawn_points)
+            # Use the path's starting point
+            spawn_x, spawn_y = self.spawn_point
             
-            # Add some random offset
-            spawn_x += random.randint(-50, 50)
-            spawn_y += random.randint(-50, 50)
+            # Add small random offset to prevent enemies from overlapping
+            spawn_x += random.randint(-30, 30)
+            spawn_y += random.randint(-30, 30)
             
             # Keep within bounds
             spawn_x = max(0, min(SCREEN_WIDTH, spawn_x))
@@ -168,9 +196,9 @@ class EnemyManager:
             # Create enemy
             enemy = Enemy(spawn_x, spawn_y, self.sprite_manager)
             
-            # Set target to castle
+            # Initialize waypoint system (enemy will start moving to first waypoint)
             castle_data = self.state_manager.castle_data
-            enemy.set_target(castle_data['x'], castle_data['y'])
+            enemy.set_target(castle_data['x'], castle_data['y'])  # This sets up the waypoint system
             
             enemies.append(enemy)
             
@@ -181,8 +209,8 @@ class EnemyManager:
         for enemy in enemies[:]:  # Use slice copy for safe iteration
             enemy.update(dt)
             
-            # Check if enemy reached the castle
-            if enemy.is_at_target():
+            # Check if enemy has completed the entire path and reached the castle
+            if enemy.has_completed_path():
                 # Attack castle
                 if enemy.can_attack():
                     # Create a simple castle-like object for the attack

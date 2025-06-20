@@ -58,8 +58,14 @@ ESSENCE_PER_ENEMY = 15
 STARTING_ESSENCE = 100
 
 # Castle settings
-CASTLE_SIZE = 64
+CASTLE_WIDTH = int(SCREEN_WIDTH * 0.2)  # Castle occupies 20% of screen width (256 pixels)
+CASTLE_HEIGHT = SCREEN_HEIGHT - 80  # Castle takes full height minus HUD (640 pixels)
+CASTLE_SIZE = CASTLE_WIDTH  # Keep for backward compatibility
 CASTLE_HEALTH = 500
+
+# Castle position (right side of map)
+CASTLE_X = SCREEN_WIDTH - CASTLE_WIDTH // 2  # Right edge minus half width (1152)
+CASTLE_Y = (SCREEN_HEIGHT - 80) // 2  # Center vertically (320)
 
 # Projectile settings
 ARROW_SPEED = 300
@@ -69,6 +75,27 @@ ARROW_SIZE = 8
 WAVE_ENEMY_COUNT_BASE = 5
 WAVE_ENEMY_COUNT_MULTIPLIER = 1.2
 WAVE_DELAY = 5.0  # seconds between waves (reduced for testing)
+
+# Enemy Path System - Updated to target the new castle position
+ENEMY_PATH = [
+    (50, 150),       # Start: Left side entrance
+    (200, 150),      # Move right (horizontal)
+    (200, 80),       # Turn up (vertical) 
+    (500, 80),       # Move right along top (horizontal)
+    (500, 250),      # Turn down (vertical)
+    (800, 250),      # Move right toward castle area (horizontal)
+    (800, 400),      # Turn down (vertical)
+    (600, 400),      # Move left (horizontal)
+    (600, 320),      # Turn up toward castle (vertical)
+    (900, 320),      # Move right to castle approach (horizontal)
+    (1000, 320),     # Get closer to castle (horizontal)
+    (CASTLE_X, CASTLE_Y)  # Final: New castle center position
+]
+
+# Path visualization
+PATH_COLOR = (255, 255, 0, 128)  # Semi-transparent yellow
+PATH_WIDTH = 15
+WAYPOINT_RADIUS = 8
 
 # Input settings
 KEY_UP = [pygame.K_w, pygame.K_UP]

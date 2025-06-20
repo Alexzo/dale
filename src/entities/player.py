@@ -1,5 +1,5 @@
 """
-Player character class.
+Player character class with animation support.
 """
 
 import pygame
@@ -25,8 +25,12 @@ class Player:
         # Movement
         self.velocity_x = 0.0
         self.velocity_y = 0.0
+        self.is_moving = False
         
-        # Sprite
+        # Animation
+        self.animation_manager = sprite_manager.get_animation('player')
+        
+        # Sprite (fallback if no animation)
         self.sprite = sprite_manager.get_sprite('player')
         if not self.sprite:
             # Fallback sprite
@@ -57,6 +61,9 @@ class Player:
             self.velocity_x = (self.velocity_x / length) * self.speed
             self.velocity_y = (self.velocity_y / length) * self.speed
             
+        # Update movement state for animation
+        self.is_moving = (self.velocity_x != 0 or self.velocity_y != 0)
+            
     def update(self, dt: float):
         """Update player position and state."""
         # Update position
@@ -71,13 +78,36 @@ class Player:
         self.rect.centerx = int(self.x)
         self.rect.centery = int(self.y)
         
+        # Update animation
+        self._update_animation(dt)
+        
+    def _update_animation(self, dt: float):
+        """Update character animation based on movement state."""
+        if self.animation_manager:
+            # Set appropriate animation based on movement
+            if self.is_moving:
+                self.animation_manager.set_animation('walk')
+            else:
+                self.animation_manager.set_animation('idle')
+                
+            # Update animation timing
+            self.animation_manager.update(dt)
+        
     def render(self, screen: pygame.Surface):
         """Render the player."""
+        # Get current sprite (animated or static)
+        current_sprite = self.sprite
+        
+        if self.animation_manager:
+            animated_frame = self.animation_manager.get_current_frame()
+            if animated_frame:
+                current_sprite = animated_frame
+        
         # Draw player sprite
-        sprite_rect = self.sprite.get_rect()
+        sprite_rect = current_sprite.get_rect()
         sprite_rect.centerx = int(self.x)
         sprite_rect.centery = int(self.y)
-        screen.blit(self.sprite, sprite_rect)
+        screen.blit(current_sprite, sprite_rect)
         
         # Draw health bar
         self._draw_health_bar(screen)
