@@ -145,6 +145,6 @@ class HUD:
         
         # Controls info
         controls_y = SCREEN_HEIGHT - HUD_HEIGHT + 55
-        controls_text = "WASD: Move | Space: Summon | E: Build Tower | Mouse: Click to build"
+        controls_text = "WASD: Move | Shift/F: Attack | Space: Summon | E: Build Tower | Mouse: Click to build"
         controls_surface = self.font_small.render(controls_text, True, (180, 180, 180))
         screen.blit(controls_surface, (10, controls_y)) 

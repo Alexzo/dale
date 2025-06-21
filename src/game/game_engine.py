@@ -197,26 +197,36 @@ class GameEngine:
         
     def _handle_combat(self):
         """Handle combat between entities."""
-        # Tower attacks
         enemies = self.state_manager.entities['enemies']
         towers = self.state_manager.entities['towers']
+        allies = self.state_manager.entities['allies']
+        projectiles = self.state_manager.entities['projectiles']
         
+        # Player attacks
+        if self.player.is_attacking:  # type: ignore
+            hit_enemies = self.player.attack_enemies(enemies)  # type: ignore
+            for enemy in hit_enemies:
+                # Check if enemy is dead from player attack
+                if enemy.health <= 0:
+                    if enemy in enemies:
+                        enemies.remove(enemy)
+                        self._on_enemy_killed(enemy)
+        
+        # Tower attacks
         for tower in towers:
             target = tower.find_target(enemies)
             if target and tower.can_fire():
                 projectile = tower.fire_at(target)
                 if projectile:
-                    self.state_manager.entities['projectiles'].append(projectile)
+                    projectiles.append(projectile)
                     
         # Ally attacks
-        allies = self.state_manager.entities['allies']
         for ally in allies:
             target = ally.find_target(enemies)
             if target and ally.can_attack():
                 ally.attack(target)
                 
         # Projectile hits
-        projectiles = self.state_manager.entities['projectiles']
         for projectile in projectiles[:]:  # Use slice copy for safe iteration
             hit_enemy = projectile.check_collision(enemies)
             if hit_enemy:
@@ -228,6 +238,12 @@ class GameEngine:
                     enemies.remove(hit_enemy)
                     self._on_enemy_killed(hit_enemy)
                     
+        # Clean up any remaining dead enemies (from ally attacks, etc.)
+        for enemy in enemies[:]:  # Use slice copy for safe iteration
+            if enemy.health <= 0:
+                enemies.remove(enemy)
+                self._on_enemy_killed(enemy)
+        
     def _handle_wave_spawning(self, dt):
         """Handle spawning of enemy waves."""
         self.wave_timer += dt

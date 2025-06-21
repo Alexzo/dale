@@ -4,10 +4,10 @@ Sprite loading and management utilities.
 
 import pygame
 import os
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Union
 
 from ..game.settings import SPRITES_DIR
-from .animations import Animation, AnimationManager, SpriteSheetLoader
+from .animations import Animation, AnimationManager, DirectionalAnimationManager, SpriteSheetLoader
 
 class SpriteManager:
     """Manages loading and caching of sprites and animations."""
@@ -16,7 +16,7 @@ class SpriteManager:
         """Initialize the sprite manager."""
         self.sprites: Dict[str, pygame.Surface] = {}
         self.sprite_rects: Dict[str, pygame.Rect] = {}
-        self.animations: Dict[str, AnimationManager] = {}
+        self.animations: Dict[str, Union[AnimationManager, DirectionalAnimationManager]] = {}
         
         # Load pixel art sprites and animations
         self._load_pixel_art_sprites()
@@ -56,11 +56,11 @@ class SpriteManager:
         else:
             print("⚠️  Could not load player animations, will use static sprite")
             
-    def _create_player_animations(self) -> Optional[AnimationManager]:
-        """Create animations for the player character."""
+    def _create_player_animations(self) -> Optional[DirectionalAnimationManager]:
+        """Create directional animations for the player character."""
         from ..game.settings import PLAYER_SIZE
         
-        anim_manager = AnimationManager()
+        anim_manager = DirectionalAnimationManager()
         player_sprite_path = os.path.join(SPRITES_DIR, 'player')
         
         # Try to load from spritesheet first
@@ -72,12 +72,11 @@ class SpriteManager:
                 # Scale frames to game size
                 scaled_frames = [pygame.transform.scale(frame, (PLAYER_SIZE, PLAYER_SIZE)) for frame in all_frames]
                 
-                # Create animations
+                # Create directional animations from base frames
                 idle_frames = scaled_frames[0:4]  # First 4 frames for idle
                 walk_frames = scaled_frames[4:8]  # Next 4 frames for walking
                 
-                anim_manager.add_animation('idle', Animation(idle_frames, 0.2, True))
-                anim_manager.add_animation('walk', Animation(walk_frames, 0.15, True))
+                self._create_directional_animations(anim_manager, idle_frames, walk_frames)
                 return anim_manager
         
         # Try to load individual frame files
@@ -85,10 +84,13 @@ class SpriteManager:
         walk_frames = self._load_animation_frames(player_sprite_path, 'walk', PLAYER_SIZE)
         
         if idle_frames or walk_frames:
-            if idle_frames:
-                anim_manager.add_animation('idle', Animation(idle_frames, 0.2, True))
-            if walk_frames:
-                anim_manager.add_animation('walk', Animation(walk_frames, 0.15, True))
+            # Use loaded frames or fallback to single frame
+            if not idle_frames and walk_frames:
+                idle_frames = [walk_frames[0]]  # Use first walk frame for idle
+            elif not walk_frames and idle_frames:
+                walk_frames = idle_frames  # Use idle frames for walking
+            
+            self._create_directional_animations(anim_manager, idle_frames, walk_frames)
             return anim_manager
             
         # Fallback: create simple animation from single sprite
@@ -98,14 +100,91 @@ class SpriteManager:
                 sprite = pygame.image.load(single_sprite_path).convert_alpha()
                 scaled_sprite = pygame.transform.scale(sprite, (PLAYER_SIZE, PLAYER_SIZE))
                 
-                # Create simple "animation" with single frame
-                anim_manager.add_animation('idle', Animation([scaled_sprite], 1.0, True))
-                anim_manager.add_animation('walk', Animation([scaled_sprite], 1.0, True))
+                # Create directional animations from single frame
+                self._create_directional_animations(anim_manager, [scaled_sprite], [scaled_sprite])
                 return anim_manager
             except pygame.error as e:
                 print(f"Error loading single sprite: {e}")
                 
         return None
+        
+    def _create_directional_animations(self, anim_manager: DirectionalAnimationManager, 
+                                     idle_frames: List[pygame.Surface], 
+                                     walk_frames: List[pygame.Surface]):
+        """Create directional animations from base frames or load directional frames."""
+        if not idle_frames or not walk_frames:
+            return
+            
+        player_sprite_path = os.path.join(SPRITES_DIR, 'player')
+        
+        # Try to load directional frames first
+        directional_frames_loaded = self._load_directional_frames(anim_manager, player_sprite_path)
+        
+        if directional_frames_loaded:
+            print("✅ Loaded directional animation frames from files")
+            return
+            
+        # Fallback: create directional variations from base frames
+        print("🔄 Creating directional animations from base frames")
+        
+        # Base frames (facing down/forward)
+        idle_down = Animation(idle_frames, 0.3, True)
+        walk_down = Animation(walk_frames, 0.15, True)
+        
+        # Create directional variations
+        # Down (original)
+        anim_manager.add_directional_animation('idle', 'down', idle_down)
+        anim_manager.add_directional_animation('walk', 'down', walk_down)
+        
+        # Up (flip vertically)
+        idle_up_frames = [pygame.transform.flip(frame, False, True) for frame in idle_frames]
+        walk_up_frames = [pygame.transform.flip(frame, False, True) for frame in walk_frames]
+        anim_manager.add_directional_animation('idle', 'up', Animation(idle_up_frames, 0.3, True))
+        anim_manager.add_directional_animation('walk', 'up', Animation(walk_up_frames, 0.15, True))
+        
+        # Left (flip horizontally)
+        idle_left_frames = [pygame.transform.flip(frame, True, False) for frame in idle_frames]
+        walk_left_frames = [pygame.transform.flip(frame, True, False) for frame in walk_frames]
+        anim_manager.add_directional_animation('idle', 'left', Animation(idle_left_frames, 0.3, True))
+        anim_manager.add_directional_animation('walk', 'left', Animation(walk_left_frames, 0.15, True))
+        
+        # Right (original - assuming sprite naturally faces right, or flip if needed)
+        anim_manager.add_directional_animation('idle', 'right', idle_down)  # Use down as right
+        anim_manager.add_directional_animation('walk', 'right', walk_down)  # Use down as right
+        
+    def _load_directional_frames(self, anim_manager: DirectionalAnimationManager, sprite_path: str) -> bool:
+        """Load directional animation frames from files if they exist."""
+        from ..game.settings import PLAYER_SIZE
+        
+        animation_types = ['idle', 'walk']
+        directions = ['up', 'down', 'left', 'right']
+        loaded_any = False
+        
+        for anim_type in animation_types:
+            for direction in directions:
+                # Try to load frames for this animation and direction
+                frames = []
+                for i in range(1, 5):  # Try to load 4 frames
+                    frame_path = os.path.join(sprite_path, f"{anim_type}_{direction}_{i}.png")
+                    if os.path.exists(frame_path):
+                        try:
+                            frame = pygame.image.load(frame_path).convert_alpha()
+                            scaled_frame = pygame.transform.scale(frame, (PLAYER_SIZE, PLAYER_SIZE))
+                            frames.append(scaled_frame)
+                        except pygame.error as e:
+                            print(f"Error loading {frame_path}: {e}")
+                            break
+                    else:
+                        break  # If one frame is missing, don't use this direction
+                
+                # If we loaded all 4 frames for this direction, add the animation
+                if len(frames) == 4:
+                    frame_duration = 0.3 if anim_type == 'idle' else 0.15
+                    animation = Animation(frames, frame_duration, True)
+                    anim_manager.add_directional_animation(anim_type, direction, animation)
+                    loaded_any = True
+        
+        return loaded_any
         
     def _load_animation_frames(self, folder_path: str, animation_name: str, target_size: int) -> List[pygame.Surface]:
         """Load animation frames from individual files."""
@@ -207,7 +286,7 @@ class SpriteManager:
         """Get a sprite by name."""
         return self.sprites.get(name)
         
-    def get_animation(self, name: str) -> Optional[AnimationManager]:
+    def get_animation(self, name: str) -> Optional[Union[AnimationManager, DirectionalAnimationManager]]:
         """Get an animation manager by name."""
         return self.animations.get(name)
         

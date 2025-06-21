@@ -32,6 +32,12 @@ PLAYER_SPEED = 200  # pixels per second
 PLAYER_SIZE = 32
 PLAYER_HEALTH = 100
 
+# Player combat settings
+PLAYER_ATTACK_DAMAGE = 35
+PLAYER_ATTACK_RANGE = 45  # Melee range in pixels
+PLAYER_ATTACK_RATE = 1.5  # Attacks per second
+PLAYER_ATTACK_KNOCKBACK = 20  # Knockback distance
+
 # Enemy settings
 ENEMY_SPEED = 50
 ENEMY_SIZE = 24
@@ -102,6 +108,7 @@ KEY_UP = [pygame.K_w, pygame.K_UP]
 KEY_DOWN = [pygame.K_s, pygame.K_DOWN]
 KEY_LEFT = [pygame.K_a, pygame.K_LEFT]
 KEY_RIGHT = [pygame.K_d, pygame.K_RIGHT]
+KEY_ATTACK = [pygame.K_LSHIFT, pygame.K_RSHIFT, pygame.K_f]  # Left Shift, Right Shift, or F key
 KEY_SUMMON_ALLY = [pygame.K_SPACE]
 KEY_BUILD_TOWER = [pygame.K_e]
 

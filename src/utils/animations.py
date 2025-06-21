@@ -197,3 +197,106 @@ class SpriteSheetLoader:
                 break
                 
         return frames 
+
+class DirectionalAnimationManager:
+    """Manages animations with directional support (up, down, left, right)."""
+    
+    def __init__(self):
+        """Initialize directional animation manager."""
+        self.directional_animations: Dict[str, Dict[str, Animation]] = {}
+        self.current_animation = ""
+        self.current_direction = "down"  # Default facing direction
+        self.current_anim_obj: Optional[Animation] = None
+        
+    def add_directional_animation(self, animation_name: str, direction: str, animation: Animation):
+        """Add an animation for a specific direction."""
+        if animation_name not in self.directional_animations:
+            self.directional_animations[animation_name] = {}
+        
+        self.directional_animations[animation_name][direction] = animation
+        
+        # If this is the first animation, make it current
+        if not self.current_animation:
+            self.set_animation(animation_name, direction)
+            
+    def add_animation_set(self, animation_name: str, animations: Dict[str, Animation]):
+        """Add a complete set of directional animations."""
+        self.directional_animations[animation_name] = animations
+        
+        # If this is the first animation, make it current
+        if not self.current_animation:
+            direction = next(iter(animations.keys()))  # Get first direction
+            self.set_animation(animation_name, direction)
+            
+    def set_animation(self, animation_name: str, direction: Optional[str] = None, force_restart: bool = False):
+        """Set the current animation and direction."""
+        if animation_name not in self.directional_animations:
+            return False
+            
+        # Use current direction if none specified
+        if direction is None:
+            direction = self.current_direction
+            
+        # Check if the specific direction exists, fallback to any available direction
+        if direction not in self.directional_animations[animation_name]:
+            # Try common fallbacks
+            fallback_directions = ["down", "right", "left", "up"]
+            found_direction = None
+            for fallback in fallback_directions:
+                if fallback in self.directional_animations[animation_name]:
+                    found_direction = fallback
+                    break
+            
+            if found_direction is None:
+                # Use any available direction
+                found_direction = next(iter(self.directional_animations[animation_name].keys()))
+            
+            direction = found_direction
+        
+        # Don't restart if it's the same animation and direction unless forced
+        if (animation_name == self.current_animation and 
+            direction == self.current_direction and not force_restart):
+            return True
+            
+        self.current_animation = animation_name
+        self.current_direction = direction
+        self.current_anim_obj = self.directional_animations[animation_name][direction]
+        
+        # Reset animation if switching or forced
+        if force_restart:
+            self.current_anim_obj.reset()
+            
+        return True
+        
+    def set_direction(self, direction: str, force_restart: bool = False):
+        """Change direction while keeping the same animation."""
+        if self.current_animation:
+            return self.set_animation(self.current_animation, direction, force_restart)
+        return False
+        
+    def update(self, dt: float):
+        """Update current animation."""
+        if self.current_anim_obj:
+            self.current_anim_obj.update(dt)
+            
+    def get_current_frame(self) -> Optional[pygame.Surface]:
+        """Get current animation frame."""
+        if self.current_anim_obj:
+            return self.current_anim_obj.get_current_frame()
+        return None
+        
+    def get_current_animation_name(self) -> str:
+        """Get current animation name."""
+        return self.current_animation
+        
+    def get_current_direction(self) -> str:
+        """Get current facing direction."""
+        return self.current_direction
+        
+    def has_animation(self, animation_name: str, direction: Optional[str] = None) -> bool:
+        """Check if animation exists for given direction."""
+        if animation_name not in self.directional_animations:
+            return False
+        if direction is None:
+            return len(self.directional_animations[animation_name]) > 0
+        return direction in self.directional_animations[animation_name] 
