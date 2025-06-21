@@ -29,6 +29,7 @@ class HUD:
         self.summon_button_rect = pygame.Rect(10, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
         self.tower_button_rect = pygame.Rect(140, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
         self.upgrade_button_rect = pygame.Rect(270, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.repair_button_rect = pygame.Rect(400, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
         
         # Selected tower (for upgrades)
         self.selected_tower = None
@@ -58,6 +59,14 @@ class HUD:
                 if self.state_manager.player_data['essence'] >= upgrade_cost:
                     # Signal to upgrade tower (handled by game engine)
                     return "upgrade_tower"
+                    
+        # Check repair button
+        if self.repair_button_rect.collidepoint(pos) and self.selected_tower:
+            if self.selected_tower.can_repair():
+                repair_cost = self.selected_tower.get_repair_cost()
+                if self.state_manager.player_data['essence'] >= repair_cost:
+                    # Signal to repair tower (handled by game engine)
+                    return "repair_tower"
                 
         return True  # Consumed the click even if no action taken
         
@@ -187,6 +196,29 @@ class HUD:
                 max_surface = self.font_small.render(max_text, True, WHITE)
                 text_rect = max_surface.get_rect(center=self.upgrade_button_rect.center)
                 screen.blit(max_surface, text_rect)
+                
+        # Repair tower button (only show if a tower is selected and damaged)
+        if self.selected_tower:
+            if self.selected_tower.can_repair():
+                repair_cost = self.selected_tower.get_repair_cost()
+                can_afford = self.state_manager.player_data['essence'] >= repair_cost
+                repair_color = (0, 150, 0) if can_afford else (60, 60, 60)  # Dark green for repair
+                pygame.draw.rect(screen, repair_color, self.repair_button_rect)
+                pygame.draw.rect(screen, WHITE, self.repair_button_rect, 2)
+                
+                repair_text = f"Repair ({repair_cost})"
+                repair_surface = self.font_small.render(repair_text, True, WHITE)
+                text_rect = repair_surface.get_rect(center=self.repair_button_rect.center)
+                screen.blit(repair_surface, text_rect)
+            elif self.selected_tower:
+                # Tower at full health
+                pygame.draw.rect(screen, (40, 40, 40), self.repair_button_rect)
+                pygame.draw.rect(screen, WHITE, self.repair_button_rect, 2)
+                
+                full_text = "FULL HP"
+                full_surface = self.font_small.render(full_text, True, WHITE)
+                text_rect = full_surface.get_rect(center=self.repair_button_rect.center)
+                screen.blit(full_surface, text_rect)
         
         # Controls info
         controls_y = SCREEN_HEIGHT - HUD_HEIGHT + 55
@@ -196,6 +228,7 @@ class HUD:
             f"E: Build Tower ({ARROW_TOWER_COST} essence)",
             "F/Shift: Attack",
             "U: Upgrade Tower (select first)",
+            "R: Repair Tower (select first)",
             "B: Toggle Build Zones"
         ]
         

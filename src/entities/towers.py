@@ -132,6 +132,32 @@ class ArrowTower:
             return 0
         return TOWER_UPGRADE_COSTS.get(self.level + 1, 0)
         
+    def can_repair(self) -> bool:
+        """Check if tower can be repaired."""
+        return self.health < self.max_health and self.is_alive()
+        
+    def get_repair_cost(self) -> int:
+        """Get the essence cost to repair the tower."""
+        if not self.can_repair():
+            return 0
+        return TOWER_REPAIR_BASE_COST + (self.level - 1) * TOWER_REPAIR_COST_PER_LEVEL
+        
+    def repair(self) -> bool:
+        """Repair the tower, restoring health."""
+        if not self.can_repair():
+            return False
+            
+        # Calculate repair amount
+        repair_amount = int(self.max_health * TOWER_REPAIR_HEALTH_PERCENT)
+        old_health = self.health
+        
+        # Apply repair (don't exceed max health)
+        self.health = min(self.max_health, self.health + repair_amount)
+        
+        actual_repair = self.health - old_health
+        print(f"🔧 Tower repaired! Health restored: +{actual_repair} ({old_health} → {self.health}/{self.max_health})")
+        return True
+        
     def upgrade(self) -> bool:
         """Upgrade the tower to the next level."""
         if not self.can_upgrade():
@@ -273,6 +299,22 @@ class TowerManager:
         success = tower.upgrade()
         if success:
             self.state_manager.add_score(15)  # Bonus points for upgrading
+            
+        return success
+        
+    def try_repair_tower(self, tower: ArrowTower) -> bool:
+        """Try to repair a tower."""
+        if not tower.can_repair():
+            return False
+            
+        repair_cost = tower.get_repair_cost()
+        if not self.state_manager.spend_essence(repair_cost):
+            return False
+            
+        # Repair the tower
+        success = tower.repair()
+        if success:
+            self.state_manager.add_score(5)  # Small bonus points for repairing
             
         return success
         

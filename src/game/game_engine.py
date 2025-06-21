@@ -259,6 +259,8 @@ class GameEngine:
                 self._try_build_tower()
             elif event.key == pygame.K_u:  # U key for upgrade
                 self._try_upgrade_selected_tower()
+            elif event.key in KEY_REPAIR_TOWER:  # R key for repair
+                self._try_repair_selected_tower()
             elif event.key in KEY_TOGGLE_BUILD_ZONES:
                 self.show_build_zones = not self.show_build_zones
                 status = "ON" if self.show_build_zones else "OFF"
@@ -300,6 +302,9 @@ class GameEngine:
             return
         elif hud_action == "upgrade_tower":
             self._upgrade_selected_tower()
+            return
+        elif hud_action == "repair_tower":
+            self._repair_selected_tower()
             return
         elif hud_action is True:  # Clicked in HUD but no action
             return
@@ -381,6 +386,34 @@ class GameEngine:
         selected_tower = self.hud.selected_tower  # type: ignore
         if selected_tower and self.tower_manager.try_upgrade_tower(selected_tower):  # type: ignore
             print(f"✅ Tower upgraded to level {selected_tower.level}!")
+            
+    def _try_repair_selected_tower(self):
+        """Try to repair the currently selected tower using R key."""
+        selected_tower = self.hud.selected_tower  # type: ignore
+        if selected_tower is None:
+            print("❌ No tower selected! Click on a tower first.")
+            return
+            
+        if not selected_tower.can_repair():
+            print("❌ Tower is already at full health!")
+            return
+            
+        repair_cost = selected_tower.get_repair_cost()
+        if self.state_manager.player_data['essence'] < repair_cost:
+            print(f"❌ Not enough essence! Need {repair_cost}, have {self.state_manager.player_data['essence']}")
+            return
+            
+        # Perform the repair
+        if self.tower_manager.try_repair_tower(selected_tower):  # type: ignore
+            print(f"✅ Tower repaired! Health: {selected_tower.health}/{selected_tower.max_health}")
+        else:
+            print("❌ Tower repair failed!")
+            
+    def _repair_selected_tower(self):
+        """Repair the currently selected tower (called from HUD button)."""
+        selected_tower = self.hud.selected_tower  # type: ignore
+        if selected_tower and self.tower_manager.try_repair_tower(selected_tower):  # type: ignore
+            print(f"✅ Tower repaired! Health: {selected_tower.health}/{selected_tower.max_health}")
                 
     def _update(self, dt):
         """Update game logic."""

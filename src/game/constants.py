@@ -141,6 +141,11 @@ TOWER_UPGRADE_COSTS = {
     5: 200   # Level 4 -> 5: 200 essence
 }
 
+# Tower repair costs (essence cost based on tower level)
+TOWER_REPAIR_BASE_COST = 25      # Base repair cost
+TOWER_REPAIR_COST_PER_LEVEL = 10 # Additional cost per tower level
+TOWER_REPAIR_HEALTH_PERCENT = 0.5 # Repair restores 50% of max health
+
 # Tower stat bonuses per level
 TOWER_HEALTH_PER_LEVEL = 25        # +25 health per level
 TOWER_DAMAGE_BONUS_PER_LEVEL = 8   # +8 damage per level
@@ -186,7 +191,7 @@ URUK_HAI_START_WAVE = 3   # Uruk Hai start appearing from wave 3
 # Enemy combat behavior constants
 ENEMY_ATTACK_RANGE = 200         # Range at which enemies can attack towers/castle (much increased)
 ENEMY_PROJECTILE_SPEED = 250     # Speed of enemy arrows (increased)
-ENEMY_PROJECTILE_DAMAGE = 5      # Damage dealt by enemy projectiles to towers
+ENEMY_PROJECTILE_DAMAGE = 1      # Damage dealt by enemy projectiles to towers
 ENEMY_TOWER_DETECTION_RANGE = 220  # Range to detect towers while moving (much increased)
 ENEMY_ATTACK_RATE = 2.5          # Attacks per second (increased again)
 ENEMY_CASTLE_SIEGE_DISTANCE = 250  # Distance from castle where enemies stop to attack (increased for multiple routes)
