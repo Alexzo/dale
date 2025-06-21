@@ -7,6 +7,7 @@ import math
 from typing import List, Optional
 
 from ..game.settings import *
+from ..game.constants import *
 
 class Projectile:
     """Base projectile class."""
@@ -88,6 +89,44 @@ class Arrow(Projectile):
         sprite_rect.centery = int(self.y)
         screen.blit(rotated_sprite, sprite_rect)
 
+class EnemyArrow(Projectile):
+    """Arrow projectile fired by enemies at towers and castle."""
+    
+    def __init__(self, x: float, y: float, dir_x: float, dir_y: float, damage: int, sprite_manager):
+        """Initialize enemy arrow."""
+        super().__init__(x, y, dir_x, dir_y, damage, ENEMY_PROJECTILE_SPEED, sprite_manager)
+        
+        self.size = ARROW_SIZE * 1.5  # Make enemy arrows larger and more visible
+        
+        # Get arrow sprite (same as regular arrows but tinted)
+        self.sprite = sprite_manager.get_sprite('arrow')
+        if not self.sprite:
+            # Fallback sprite - bright red for enemy arrows to make them visible
+            self.sprite = pygame.Surface((int(self.size), int(self.size)), pygame.SRCALPHA)
+            pygame.draw.circle(self.sprite, (255, 0, 0), (int(self.size//2), int(self.size//2)), int(self.size//2))
+            # Add a bright glow effect
+            pygame.draw.circle(self.sprite, (255, 100, 100, 150), (int(self.size//2), int(self.size//2)), int(self.size//2 + 2))
+        else:
+            # Scale up and tint the arrow sprite to make it more visible
+            scaled_sprite = pygame.transform.scale(self.sprite, (int(self.size), int(self.size)))
+            tinted_sprite = scaled_sprite.copy()
+            red_overlay = pygame.Surface(tinted_sprite.get_size(), pygame.SRCALPHA)
+            red_overlay.fill((255, 50, 50, 120))  # Strong red tint
+            tinted_sprite.blit(red_overlay, (0, 0))
+            self.sprite = tinted_sprite
+            
+        # Calculate rotation angle for arrow direction
+        self.angle = math.degrees(math.atan2(dir_y, dir_x))
+        
+    def render(self, screen: pygame.Surface):
+        """Render the enemy arrow with proper rotation."""
+        # Rotate sprite based on direction
+        rotated_sprite = pygame.transform.rotate(self.sprite, -self.angle)
+        sprite_rect = rotated_sprite.get_rect()
+        sprite_rect.centerx = int(self.x)
+        sprite_rect.centery = int(self.y)
+        screen.blit(rotated_sprite, sprite_rect)
+
 class ProjectileManager:
     """Manages all projectiles in the game."""
     
@@ -118,4 +157,20 @@ class ProjectileManager:
             dir_x = 1.0
             dir_y = 0.0
             
-        return Arrow(x, y, dir_x, dir_y, damage, self.sprite_manager) 
+        return Arrow(x, y, dir_x, dir_y, damage, self.sprite_manager)
+        
+    def create_enemy_arrow(self, x: float, y: float, target_x: float, target_y: float, damage: int) -> EnemyArrow:
+        """Create an enemy arrow projectile aimed at a target."""
+        # Calculate direction
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.sqrt(dx**2 + dy**2)
+        
+        if distance > 0:
+            dir_x = dx / distance
+            dir_y = dy / distance
+        else:
+            dir_x = 1.0
+            dir_y = 0.0
+            
+        return EnemyArrow(x, y, dir_x, dir_y, damage, self.sprite_manager) 

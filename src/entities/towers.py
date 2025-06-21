@@ -377,6 +377,19 @@ class TowerManager:
         for tower in towers:
             tower.update(dt)
             
+        # Remove destroyed towers
+        self._remove_destroyed_towers()
+        
+    def _remove_destroyed_towers(self):
+        """Remove towers that have been destroyed (health <= 0)."""
+        towers = self.state_manager.entities['towers']
+        
+        for tower in towers[:]:  # Use slice copy for safe iteration
+            if not tower.is_alive():
+                print(f"🗑️ Removing destroyed tower at grid ({tower.grid_x}, {tower.grid_y})")
+                towers.remove(tower)
+                self.occupied_positions.discard((tower.grid_x, tower.grid_y))
+            
     def remove_tower(self, tower):
         """Remove a tower."""
         towers = self.state_manager.entities['towers']

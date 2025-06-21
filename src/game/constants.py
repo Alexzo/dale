@@ -93,7 +93,7 @@ PATH_WIDTH = 40
 WAYPOINT_RADIUS = 8
 TOWER_SIZE = 32
 PLAYER_SIZE = 48
-ENEMY_SIZE = 32
+# ENEMY_SIZE removed - now using specific sizes per enemy type (ORC_SIZE, URUK_HAI_SIZE)
 ALLY_SIZE = 40
 ARROW_SIZE = 8
 
@@ -159,4 +159,39 @@ TOWER_LEVEL_COLORS = {
     3: (205, 133, 63),   # Peru
     4: (218, 165, 32),   # Goldenrod
     5: (255, 215, 0)     # Gold (max level)
-} 
+}
+
+# Enemy type constants - Orcs (basic) and Uruk Hai (advanced)
+# Orc stats (basic enemy type)
+ORC_HEALTH = 30
+ORC_SPEED = 50
+ORC_DAMAGE = 10
+ORC_SIZE = 24
+ORC_COLOR = (0, 100, 0)  # Dark green
+
+# Uruk Hai stats (advanced enemy type - stronger than Orcs)
+URUK_HAI_HEALTH = 50      # +20 health over Orcs
+URUK_HAI_SPEED = 60       # +10 speed over Orcs  
+URUK_HAI_DAMAGE = 15      # +5 damage over Orcs
+URUK_HAI_SIZE = 28        # Slightly larger than Orcs
+URUK_HAI_COLOR = (40, 40, 40)  # Dark gray/black
+
+# Enemy spawning ratios (per wave)
+ORC_SPAWN_RATIO = 0.7     # 70% of enemies are Orcs
+URUK_HAI_SPAWN_RATIO = 0.3  # 30% of enemies are Uruk Hai
+
+# Enemy wave progression
+URUK_HAI_START_WAVE = 3   # Uruk Hai start appearing from wave 3
+
+# Enemy combat behavior constants
+ENEMY_ATTACK_RANGE = 200         # Range at which enemies can attack towers/castle (much increased)
+ENEMY_PROJECTILE_SPEED = 250     # Speed of enemy arrows (increased)
+ENEMY_PROJECTILE_DAMAGE = 5      # Damage dealt by enemy projectiles to towers
+ENEMY_TOWER_DETECTION_RANGE = 220  # Range to detect towers while moving (much increased)
+ENEMY_ATTACK_RATE = 2.5          # Attacks per second (increased again)
+ENEMY_CASTLE_SIEGE_DISTANCE = 60  # Distance from castle where enemies stop to attack
+
+# Enemy AI states
+ENEMY_STATE_MOVING = "moving"
+ENEMY_STATE_ATTACKING_TOWER = "attacking_tower"  
+ENEMY_STATE_ATTACKING_CASTLE = "attacking_castle" 

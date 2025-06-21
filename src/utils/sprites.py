@@ -34,7 +34,10 @@ class SpriteManager:
             'player': 'player/elf_warrior.png',
             'ally': 'allies/elf_warrior.png',
             'enemy_orc': 'enemies/orc.png',
+            'orc': 'enemies/orc.png',                    # Orc enemy type
+            'uruk_hai': 'enemies/uruk_hai.png',          # Uruk Hai enemy type
             'enemy_goblin': 'enemies/goblin.png',
+            'enemy': 'enemies/generic_enemy.png',        # Generic fallback
             'arrow_tower': 'towers/arrow_tower.png',
             'castle': 'ui/castle.png',
             'arrow': 'projectiles/arrow.png',
@@ -357,12 +360,17 @@ class SpriteManager:
         """Get the appropriate size for different sprite types."""
         from ..game.settings import (PLAYER_SIZE, ENEMY_SIZE, TOWER_SIZE, ALLY_SIZE, ARROW_SIZE)
         
+        # Import enemy type sizes from constants
+        from ..game.constants import ORC_SIZE, URUK_HAI_SIZE
+        
         size_mapping = {
             'player': (PLAYER_SIZE, PLAYER_SIZE),
             'ally': (ALLY_SIZE, ALLY_SIZE),
-            'enemy_orc': (ENEMY_SIZE, ENEMY_SIZE),
+            'enemy_orc': (ORC_SIZE, ORC_SIZE),
+            'orc': (ORC_SIZE, ORC_SIZE),
+            'uruk_hai': (URUK_HAI_SIZE, URUK_HAI_SIZE),
             'enemy_goblin': (ENEMY_SIZE, ENEMY_SIZE),
-            'enemy': (ENEMY_SIZE, ENEMY_SIZE),
+            'enemy': (ENEMY_SIZE, ENEMY_SIZE),  # Generic fallback
             'arrow_tower': (TOWER_SIZE, TOWER_SIZE),
             'castle': (64, 64),
             'arrow': (ARROW_SIZE, ARROW_SIZE),

@@ -413,6 +413,9 @@ class GameEngine:
         # Handle combat
         self._handle_combat()
         
+        # Handle enemy castle attacks
+        self._handle_enemy_castle_attacks()
+        
         # Handle wave spawning
         self._handle_wave_spawning(dt)
         
@@ -444,14 +447,23 @@ class GameEngine:
                 if projectile:
                     projectiles.append(projectile)
                     
-        # Ally attacks
+        # Ally attacks - now using projectiles instead of direct damage
         for ally in allies:
             target = ally.find_target(enemies)
             if target and ally.can_attack():
-                ally.attack(target)
+                # Create projectile instead of direct damage
+                projectile = self.projectile_manager.create_arrow(  # type: ignore
+                    ally.x, ally.y, target.x, target.y, ally.damage
+                )
+                projectiles.append(projectile)
+                ally.attack_cooldown = 1.0 / ally.attack_rate  # Set cooldown
                 
-        # Projectile hits
+        # Projectile hits (only tower/ally projectiles should hit enemies)
         for projectile in projectiles[:]:  # Use slice copy for safe iteration
+            # Skip enemy projectiles - they should only hit towers, not enemies
+            if hasattr(projectile, '__class__') and 'EnemyArrow' in str(projectile.__class__):
+                continue
+                
             hit_enemy = projectile.check_collision(enemies)
             if hit_enemy:
                 hit_enemy.take_damage(projectile.damage)
@@ -467,6 +479,18 @@ class GameEngine:
             if enemy.health <= 0:
                 enemies.remove(enemy)
                 self._on_enemy_killed(enemy)
+                
+    def _handle_enemy_castle_attacks(self):
+        """Handle enemies attacking the castle with melee attacks."""
+        enemies = self.state_manager.entities['enemies']
+        
+        for enemy in enemies:
+            # Check if enemy is attacking the castle
+            if hasattr(enemy, 'ai_state') and hasattr(enemy, 'has_reached_castle'):
+                if enemy.ai_state == "attacking_castle" and enemy.has_reached_castle:
+                    # Enemy melee attack on castle is handled in enemy update
+                    # Just need to ensure the state manager gets the damage
+                    pass  # Castle damage is applied directly in enemy._attack_castle_melee()
         
     def _handle_wave_spawning(self, dt):
         """Handle spawning of enemy waves."""
