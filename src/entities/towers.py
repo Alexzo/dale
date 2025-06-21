@@ -144,16 +144,20 @@ class TowerManager:
         if grid_y < 0 or grid_y >= (GRID_HEIGHT - HUD_HEIGHT // TILE_SIZE):
             return False
             
+        # Convert tower position to world coordinates
+        tower_x = grid_x * TILE_SIZE + TILE_SIZE // 2
+        tower_y = grid_y * TILE_SIZE + TILE_SIZE // 2
+        
+        # Check if too close to enemy path
+        if self._is_too_close_to_path(tower_x, tower_y):
+            return False
+            
         # Check if too close to castle (updated for new castle size)
         castle_data = self.state_manager.castle_data
         castle_left = castle_data['x'] - CASTLE_WIDTH//2
         castle_right = castle_data['x'] + CASTLE_WIDTH//2
         castle_top = castle_data['y'] - CASTLE_HEIGHT//2
         castle_bottom = castle_data['y'] + CASTLE_HEIGHT//2
-        
-        # Convert tower position to world coordinates
-        tower_x = grid_x * TILE_SIZE + TILE_SIZE // 2
-        tower_y = grid_y * TILE_SIZE + TILE_SIZE // 2
         
         # Add buffer zone around castle
         buffer = TILE_SIZE * 2  # 2 tile buffer
@@ -162,6 +166,53 @@ class TowerManager:
             return False
             
         return True
+        
+    def _is_too_close_to_path(self, tower_x: float, tower_y: float) -> bool:
+        """Check if tower position is too close to the enemy path."""
+        # Define minimum distance from path (path width + tower size + buffer)
+        min_distance = PATH_WIDTH // 2 + TOWER_SIZE // 2 + 10  # 10 pixel buffer
+        
+        # Check distance to each path segment
+        for i in range(len(ENEMY_PATH) - 1):
+            start_point = ENEMY_PATH[i]
+            end_point = ENEMY_PATH[i + 1]
+            
+            # Calculate distance from tower position to this path segment
+            distance = self._point_to_line_segment_distance(
+                tower_x, tower_y,
+                start_point[0], start_point[1],
+                end_point[0], end_point[1]
+            )
+            
+            if distance < min_distance:
+                return True  # Too close to path
+                
+        return False  # Safe distance from all path segments
+        
+    def _point_to_line_segment_distance(self, px: float, py: float, 
+                                      x1: float, y1: float, x2: float, y2: float) -> float:
+        """Calculate the shortest distance from a point to a line segment."""
+        # Vector from start to end of line segment
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        # If the segment has zero length, return distance to start point
+        if dx == 0 and dy == 0:
+            return math.sqrt((px - x1)**2 + (py - y1)**2)
+        
+        # Calculate parameter t that represents position along the line segment
+        # t = 0 means start point, t = 1 means end point
+        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+        
+        # Clamp t to [0, 1] to stay within the line segment
+        t = max(0, min(1, t))
+        
+        # Find the closest point on the line segment
+        closest_x = x1 + t * dx
+        closest_y = y1 + t * dy
+        
+        # Return distance from point to closest point on segment
+        return math.sqrt((px - closest_x)**2 + (py - closest_y)**2)
         
     def update(self, dt: float):
         """Update all towers."""

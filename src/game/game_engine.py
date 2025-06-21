@@ -53,6 +53,9 @@ class GameEngine:
         self.last_wave_time = 0.0
         self.wave_timer = 0.0
         
+        # UI state
+        self.show_build_zones = True  # Show no-build zones by default
+        
         # Running flag
         self.running = True
         
@@ -120,6 +123,10 @@ class GameEngine:
                 self._try_summon_ally()
             elif event.key in KEY_BUILD_TOWER:
                 self._try_build_tower()
+            elif event.key in KEY_TOGGLE_BUILD_ZONES:
+                self.show_build_zones = not self.show_build_zones
+                status = "ON" if self.show_build_zones else "OFF"
+                print(f"🔧 No-build zones visibility: {status}")
                 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Left click
@@ -142,7 +149,20 @@ class GameEngine:
         # Otherwise, try to build tower at position
         grid_x = pos[0] // TILE_SIZE
         grid_y = pos[1] // TILE_SIZE
-        self.tower_manager.try_build_tower(grid_x, grid_y)  # type: ignore
+        
+        # Try to build tower and provide feedback
+        if not self.tower_manager.try_build_tower(grid_x, grid_y):  # type: ignore
+            # Tower couldn't be built - could be due to path, castle, or essence
+            tower_x = grid_x * TILE_SIZE + TILE_SIZE // 2
+            tower_y = grid_y * TILE_SIZE + TILE_SIZE // 2
+            
+            # Check specific reason for failure to provide better feedback
+            if self.tower_manager._is_too_close_to_path(tower_x, tower_y):  # type: ignore
+                print("❌ Cannot build tower: Too close to enemy path!")
+            elif not self.state_manager.player_data['essence'] >= ARROW_TOWER_COST:
+                print("❌ Cannot build tower: Not enough essence!")
+            else:
+                print("❌ Cannot build tower: Invalid location!")
         
     def _try_summon_ally(self):
         """Try to summon an ally near the player."""
@@ -311,6 +331,10 @@ class GameEngine:
         # Render enemy path first (so it appears under other elements)
         self._render_enemy_path()
         
+        # Render no-build zones around path (if enabled)
+        if self.show_build_zones:
+            self._render_path_no_build_zones()
+        
         # Render castle (now much larger)
         castle_rect = pygame.Rect(
             self.state_manager.castle_data['x'] - CASTLE_WIDTH//2,
@@ -410,6 +434,50 @@ class GameEngine:
                 # Regular waypoints - yellow circles
                 pygame.draw.circle(self.screen, (255, 255, 0), waypoint, WAYPOINT_RADIUS)
                 pygame.draw.circle(self.screen, (180, 180, 0), waypoint, WAYPOINT_RADIUS, 2)
+        
+    def _render_path_no_build_zones(self):
+        """Render semi-transparent no-build zones around the enemy path."""
+        if len(ENEMY_PATH) < 2:
+            return
+            
+        # Create a surface for the no-build zones with alpha transparency
+        no_build_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        
+        # Define no-build zone width (same as tower placement logic)
+        no_build_width = PATH_WIDTH // 2 + TOWER_SIZE // 2 + 10  # Same as tower placement check
+        
+        # Draw no-build zones for each path segment
+        for i in range(len(ENEMY_PATH) - 1):
+            start_pos = ENEMY_PATH[i]
+            end_pos = ENEMY_PATH[i + 1]
+            
+            # Calculate the vector along the path segment
+            dx = end_pos[0] - start_pos[0]
+            dy = end_pos[1] - start_pos[1]
+            length = (dx**2 + dy**2)**0.5
+            
+            if length > 0:
+                # Normalize the direction vector
+                dx_norm = dx / length
+                dy_norm = dy / length
+                
+                # Calculate perpendicular vector for width
+                perp_x = -dy_norm * no_build_width
+                perp_y = dx_norm * no_build_width
+                
+                # Create rectangle points for the no-build zone
+                points = [
+                    (start_pos[0] + perp_x, start_pos[1] + perp_y),
+                    (start_pos[0] - perp_x, start_pos[1] - perp_y),
+                    (end_pos[0] - perp_x, end_pos[1] - perp_y),
+                    (end_pos[0] + perp_x, end_pos[1] + perp_y)
+                ]
+                
+                # Draw semi-transparent red zone
+                pygame.draw.polygon(no_build_surface, (255, 0, 0, 60), points)
+        
+        # Blit the no-build zones to the main screen
+        self.screen.blit(no_build_surface, (0, 0))
         
     def _cleanup(self):
         """Clean up resources."""

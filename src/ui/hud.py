@@ -145,6 +145,16 @@ class HUD:
         
         # Controls info
         controls_y = SCREEN_HEIGHT - HUD_HEIGHT + 55
-        controls_text = "WASD: Move | Shift/F: Attack | Space: Summon | E: Build Tower | Mouse: Click to build"
-        controls_surface = self.font_small.render(controls_text, True, (180, 180, 180))
-        screen.blit(controls_surface, (10, controls_y)) 
+        controls_text = [
+            "WASD/Arrows: Move",
+            f"Space: Summon Ally ({ALLY_COST} essence)",
+            f"E: Build Tower ({ARROW_TOWER_COST} essence)",
+            "F/Shift: Attack",
+            "B: Toggle Build Zones"
+        ]
+        
+        y_offset = 5
+        for text in controls_text:
+            text_surface = self.font_small.render(text, True, WHITE)
+            screen.blit(text_surface, (10, controls_y + y_offset))
+            y_offset += 22 

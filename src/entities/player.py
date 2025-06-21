@@ -145,6 +145,13 @@ class Player:
             self.attack_cooldown = 1.0 / self.attack_rate
             self.last_attack_time = time.time()
             
+            # Reset attack animation to start from beginning
+            if self.animation_manager and hasattr(self.animation_manager, 'set_direction'):
+                # Reset the attack animation for the current direction
+                attack_anim = self.animation_manager.get_animation('attack', self.facing_direction)
+                if attack_anim:
+                    attack_anim.reset()  # Reset to first frame
+            
     def get_attack_area(self) -> pygame.Rect:
         """Get the area where the attack can hit enemies."""
         # Create attack area in front of player
@@ -188,8 +195,7 @@ class Player:
             if hasattr(self.animation_manager, 'set_direction'):
                 # Directional animation manager
                 if self.is_attacking:
-                    # TODO: Add attack animation when available
-                    self.animation_manager.set_animation('idle', self.facing_direction)
+                    self.animation_manager.set_animation('attack', self.facing_direction)
                 elif self.is_moving:
                     self.animation_manager.set_animation('walk', self.facing_direction)
                 else:
@@ -197,7 +203,10 @@ class Player:
             else:
                 # Regular animation manager (fallback)
                 if self.is_attacking:
-                    self.animation_manager.set_animation('idle')
+                    if hasattr(self.animation_manager, 'set_animation'):
+                        self.animation_manager.set_animation('attack')
+                    else:
+                        self.animation_manager.set_animation('idle')
                 elif self.is_moving:
                     self.animation_manager.set_animation('walk')
                 else:
@@ -222,51 +231,8 @@ class Player:
         sprite_rect.centery = int(self.y)
         screen.blit(current_sprite, sprite_rect)
         
-        # Draw attack effect if attacking
-        if self.is_attacking:
-            self._draw_attack_effect(screen)
-        
         # Draw health bar
         self._draw_health_bar(screen)
-        
-    def _draw_attack_effect(self, screen: pygame.Surface):
-        """Draw visual effect for sword attack."""
-        if not self.is_attacking:
-            return
-            
-        # Calculate attack progress (0.0 to 1.0)
-        attack_progress = 1.0 - (self.attack_timer / self.attack_duration)
-        
-        # Draw sword swing arc
-        center_x = int(self.x)
-        center_y = int(self.y)
-        
-        # Create swing effect with multiple arcs
-        for i in range(3):
-            alpha = int(255 * (1.0 - attack_progress) * (0.3 + i * 0.2))
-            if alpha > 0:
-                # Create temporary surface for alpha blending
-                swing_surface = pygame.Surface((self.attack_range * 2, self.attack_range * 2), pygame.SRCALPHA)
-                
-                # Draw sword trail as an arc
-                start_angle = -45 + attack_progress * 90  # Swing from -45 to +45 degrees
-                end_angle = start_angle + 15  # Width of the swing trail
-                
-                # Draw multiple colored arcs for sword effect
-                colors = [(255, 255, 200, alpha), (200, 200, 255, alpha), (255, 200, 200, alpha)]
-                radii = [self.attack_range - i * 5, self.attack_range - i * 8, self.attack_range - i * 12]
-                
-                for j, (color, radius) in enumerate(zip(colors, radii)):
-                    if radius > 0:
-                        # Draw arc segments to simulate sword trail
-                        for angle in range(int(start_angle), int(end_angle), 2):
-                            end_x = center_x + int(radius * math.cos(math.radians(angle)))
-                            end_y = center_y + int(radius * math.sin(math.radians(angle)))
-                            pygame.draw.circle(screen, color[:3], (end_x, end_y), 3 - j)
-        
-        # Draw attack range indicator (debug - can be removed)
-        if False:  # Set to True for debugging
-            pygame.draw.circle(screen, (255, 0, 0, 50), (center_x, center_y), self.attack_range, 1)
         
     def _draw_health_bar(self, screen: pygame.Surface):
         """Draw player health bar."""

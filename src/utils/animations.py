@@ -299,4 +299,30 @@ class DirectionalAnimationManager:
             return False
         if direction is None:
             return len(self.directional_animations[animation_name]) > 0
-        return direction in self.directional_animations[animation_name] 
+        return direction in self.directional_animations[animation_name]
+        
+    def get_animation(self, animation_name: str, direction: Optional[str] = None) -> Optional[Animation]:
+        """Get a specific animation by name and direction."""
+        if animation_name not in self.directional_animations:
+            return None
+            
+        # Use current direction if none specified
+        if direction is None:
+            direction = self.current_direction
+            
+        # Check if the specific direction exists
+        if direction in self.directional_animations[animation_name]:
+            return self.directional_animations[animation_name][direction]
+            
+        # Try fallbacks if specific direction doesn't exist
+        fallback_directions = ["down", "right", "left", "up"]
+        for fallback in fallback_directions:
+            if fallback in self.directional_animations[animation_name]:
+                return self.directional_animations[animation_name][fallback]
+                
+        # Return any available direction as last resort
+        directions = list(self.directional_animations[animation_name].keys())
+        if directions:
+            return self.directional_animations[animation_name][directions[0]]
+            
+        return None 

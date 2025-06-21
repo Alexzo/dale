@@ -111,6 +111,7 @@ KEY_RIGHT = [pygame.K_d, pygame.K_RIGHT]
 KEY_ATTACK = [pygame.K_LSHIFT, pygame.K_RSHIFT, pygame.K_f]  # Left Shift, Right Shift, or F key
 KEY_SUMMON_ALLY = [pygame.K_SPACE]
 KEY_BUILD_TOWER = [pygame.K_e]
+KEY_TOGGLE_BUILD_ZONES = [pygame.K_b]  # B key to toggle no-build zone visibility
 
 # Asset paths
 ASSETS_DIR = "assets"

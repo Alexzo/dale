@@ -4,6 +4,7 @@ Sprite loading and management utilities.
 
 import pygame
 import os
+import math
 from typing import Dict, Optional, List, Union
 
 from ..game.settings import SPRITES_DIR
@@ -156,9 +157,12 @@ class SpriteManager:
         """Load directional animation frames from files if they exist."""
         from ..game.settings import PLAYER_SIZE
         
-        animation_types = ['idle', 'walk']
+        animation_types = ['idle', 'walk', 'attack']
         directions = ['up', 'down', 'left', 'right']
         loaded_any = False
+        
+        # Track loaded attack frames for potential flipping
+        attack_frames_loaded = {}
         
         for anim_type in animation_types:
             for direction in directions:
@@ -179,12 +183,56 @@ class SpriteManager:
                 
                 # If we loaded all 4 frames for this direction, add the animation
                 if len(frames) == 4:
-                    frame_duration = 0.3 if anim_type == 'idle' else 0.15
-                    animation = Animation(frames, frame_duration, True)
+                    if anim_type == 'idle':
+                        frame_duration = 0.3
+                        loop = True
+                    elif anim_type == 'walk':
+                        frame_duration = 0.15
+                        loop = True
+                    elif anim_type == 'attack':
+                        frame_duration = 0.08
+                        loop = False  # Attack animations don't loop
+                        attack_frames_loaded[direction] = frames
+                    
+                    animation = Animation(frames, frame_duration, loop)
                     anim_manager.add_directional_animation(anim_type, direction, animation)
                     loaded_any = True
         
+        # Handle missing attack directions by flipping existing ones
+        if 'attack' in [anim for anim in animation_types]:
+            self._create_missing_attack_directions(anim_manager, attack_frames_loaded)
+        
         return loaded_any
+        
+    def _create_missing_attack_directions(self, anim_manager: DirectionalAnimationManager, attack_frames_loaded: Dict[str, List[pygame.Surface]]):
+        """Create missing attack directions by flipping existing ones."""
+        # If we have right but not left, create left by flipping right
+        if 'right' in attack_frames_loaded and 'left' not in attack_frames_loaded:
+            left_frames = [pygame.transform.flip(frame, True, False) for frame in attack_frames_loaded['right']]
+            left_animation = Animation(left_frames, 0.08, False)
+            anim_manager.add_directional_animation('attack', 'left', left_animation)
+            print("✅ Created left attack animation by flipping right frames")
+        
+        # If we have left but not right, create right by flipping left
+        elif 'left' in attack_frames_loaded and 'right' not in attack_frames_loaded:
+            right_frames = [pygame.transform.flip(frame, True, False) for frame in attack_frames_loaded['left']]
+            right_animation = Animation(right_frames, 0.08, False)
+            anim_manager.add_directional_animation('attack', 'right', right_animation)
+            print("✅ Created right attack animation by flipping left frames")
+        
+        # If we have up but not down, create down by flipping up
+        if 'up' in attack_frames_loaded and 'down' not in attack_frames_loaded:
+            down_frames = [pygame.transform.flip(frame, False, True) for frame in attack_frames_loaded['up']]
+            down_animation = Animation(down_frames, 0.08, False)
+            anim_manager.add_directional_animation('attack', 'down', down_animation)
+            print("✅ Created down attack animation by flipping up frames")
+        
+        # If we have down but not up, create up by flipping down  
+        elif 'down' in attack_frames_loaded and 'up' not in attack_frames_loaded:
+            up_frames = [pygame.transform.flip(frame, False, True) for frame in attack_frames_loaded['down']]
+            up_animation = Animation(up_frames, 0.08, False)
+            anim_manager.add_directional_animation('attack', 'up', up_animation)
+            print("✅ Created up attack animation by flipping down frames")
         
     def _load_animation_frames(self, folder_path: str, animation_name: str, target_size: int) -> List[pygame.Surface]:
         """Load animation frames from individual files."""
