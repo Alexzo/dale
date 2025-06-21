@@ -60,10 +60,14 @@ class GameEngine:
         # UI state
         self.show_build_zones = True  # Show no-build zones by default
         
+        # Environment decorations
+        self.decorations = []
+        
         # Running flag
         self.running = True
         
         self._initialize_game_objects()
+        self._generate_environment_decorations()
         
     def _initialize_game_objects(self):
         """Initialize all game objects."""
@@ -90,6 +94,120 @@ class GameEngine:
         self.main_menu = MainMenu(self.character_progression, self.sprite_manager, self.database)
         self.game_over_menu = GameOverMenu(self.character_progression)
         self.pause_menu = PauseMenu()
+        
+    def _generate_environment_decorations(self):
+        """Generate environment decorations like trees and rocks."""
+        import random
+        
+        print("🌲 Generating environment decorations...")
+        
+        # Define decoration types and their spawn counts
+        decoration_types = {
+            'tree_oak': {'count': 8, 'size': (48, 64)},
+            'tree_pine': {'count': 6, 'size': (40, 72)}, 
+            'tree_birch': {'count': 5, 'size': (44, 68)},
+            'rock_small': {'count': 12, 'size': (24, 20)},
+            'rock_medium': {'count': 8, 'size': (36, 30)},
+            'rock_large': {'count': 4, 'size': (48, 40)},
+            'boulder': {'count': 3, 'size': (60, 50)}
+        }
+        
+        # Generate decorations for each type
+        for decoration_name, config in decoration_types.items():
+            sprite = self.sprite_manager.get_sprite(decoration_name)
+            if not sprite:
+                continue
+                
+            attempts = 0
+            placed = 0
+            max_attempts = config['count'] * 20  # Prevent infinite loops
+            
+            while placed < config['count'] and attempts < max_attempts:
+                attempts += 1
+                
+                # Random position on the battlefield
+                x = random.randint(50, SCREEN_WIDTH - 100)
+                y = random.randint(50, SCREEN_HEIGHT - HUD_HEIGHT - 50)
+                
+                # Check if position is valid (not blocking gameplay areas)
+                if self._is_valid_decoration_position(x, y, config['size']):
+                    decoration = {
+                        'type': decoration_name,
+                        'x': x,
+                        'y': y, 
+                        'sprite': sprite,
+                        'size': config['size']
+                    }
+                    self.decorations.append(decoration)
+                    placed += 1
+                    
+        print(f"🎨 Placed {len(self.decorations)} environment decorations")
+        
+    def _is_valid_decoration_position(self, x: int, y: int, size: tuple) -> bool:
+        """Check if a decoration can be placed at the given position."""
+        decoration_width, decoration_height = size
+        decoration_radius = max(decoration_width, decoration_height) // 2
+        
+        # Check distance from castle
+        castle_data = self.state_manager.castle_data
+        castle_distance = ((x - castle_data['x'])**2 + (y - castle_data['y'])**2)**0.5
+        if castle_distance < CASTLE_WIDTH // 2 + decoration_radius + 30:
+            return False
+            
+        # Check distance from all enemy paths
+        min_path_distance = PATH_WIDTH // 2 + decoration_radius + 20
+        
+        for enemy_path in ENEMY_PATHS:
+            for i in range(len(enemy_path) - 1):
+                start_pos = enemy_path[i]
+                end_pos = enemy_path[i + 1]
+                
+                # Calculate distance from decoration center to path segment
+                distance = self._point_to_line_segment_distance(
+                    x, y, start_pos[0], start_pos[1], end_pos[0], end_pos[1]
+                )
+                
+                if distance < min_path_distance:
+                    return False
+        
+        # Check distance from other decorations (prevent clustering)
+        for other_decoration in self.decorations:
+            other_x = other_decoration['x']
+            other_y = other_decoration['y']
+            distance = ((x - other_x)**2 + (y - other_y)**2)**0.5
+            
+            # Minimum distance based on decoration sizes
+            min_distance = decoration_radius + max(other_decoration['size']) // 2 + 15
+            if distance < min_distance:
+                return False
+                
+        return True
+        
+    def _point_to_line_segment_distance(self, px: float, py: float, 
+                                      x1: float, y1: float, x2: float, y2: float) -> float:
+        """Calculate the shortest distance from a point to a line segment."""
+        import math
+        
+        # Vector from start to end of line segment
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        # If the segment has zero length, return distance to start point
+        if dx == 0 and dy == 0:
+            return math.sqrt((px - x1)**2 + (py - y1)**2)
+        
+        # Calculate parameter t that represents position along the line segment
+        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+        
+        # Clamp t to [0, 1] to stay within the line segment
+        t = max(0, min(1, t))
+        
+        # Find the closest point on the line segment
+        closest_x = x1 + t * dx
+        closest_y = y1 + t * dy
+        
+        # Return distance from point to closest point on segment
+        return math.sqrt((px - closest_x)**2 + (py - closest_y)**2)
         
     def run(self):
         """Main game loop."""
@@ -435,6 +553,9 @@ class GameEngine:
         # Render no-build zones around path (if enabled)
         if self.show_build_zones:
             self._render_path_no_build_zones()
+            
+        # Render environment decorations (behind gameplay elements)
+        self._render_environment_decorations()
         
         # Render castle (now much larger)
         castle_rect = pygame.Rect(
@@ -507,38 +628,114 @@ class GameEngine:
         self.hud.render(self.screen)  # type: ignore
         
     def _render_enemy_path(self):
-        """Render the enemy path on the game map."""
-        if len(ENEMY_PATH) < 2:
+        """Render all enemy paths on the game map with environment textures."""
+        if not ENEMY_PATHS:
             return
             
-        # Draw path lines connecting waypoints
-        for i in range(len(ENEMY_PATH) - 1):
-            start_pos = ENEMY_PATH[i]
-            end_pos = ENEMY_PATH[i + 1]
+        # Draw all paths with different textures and colors
+        for path_index, enemy_path in enumerate(ENEMY_PATHS):
+            if len(enemy_path) < 2:
+                continue
+                
+            # Get texture and color for this path
+            texture_name = PATH_TEXTURES[path_index] if path_index < len(PATH_TEXTURES) else 'path_dirt'
+            path_color = PATH_COLORS[path_index] if path_index < len(PATH_COLORS) else (255, 255, 255)
+            path_color_dark = tuple(int(c * 0.7) for c in path_color)  # Darker outline
             
-            # Draw thick yellow line for the path
-            pygame.draw.line(self.screen, (255, 255, 0), start_pos, end_pos, PATH_WIDTH)
-            # Draw thinner dark outline for better visibility
-            pygame.draw.line(self.screen, (180, 180, 0), start_pos, end_pos, 2)
+            # Get texture from sprite manager
+            path_texture = self.sprite_manager.get_sprite(texture_name)
             
-        # Draw waypoint circles
-        for i, waypoint in enumerate(ENEMY_PATH):
-            if i == 0:
-                # Start point - green circle
-                pygame.draw.circle(self.screen, (0, 255, 0), waypoint, WAYPOINT_RADIUS + 2)
-                pygame.draw.circle(self.screen, (0, 180, 0), waypoint, WAYPOINT_RADIUS + 2, 2)
-            elif i == len(ENEMY_PATH) - 1:
-                # End point (castle) - red circle
-                pygame.draw.circle(self.screen, (255, 0, 0), waypoint, WAYPOINT_RADIUS + 2)
-                pygame.draw.circle(self.screen, (180, 0, 0), waypoint, WAYPOINT_RADIUS + 2, 2)
-            else:
-                # Regular waypoints - yellow circles
-                pygame.draw.circle(self.screen, (255, 255, 0), waypoint, WAYPOINT_RADIUS)
-                pygame.draw.circle(self.screen, (180, 180, 0), waypoint, WAYPOINT_RADIUS, 2)
+            # Draw textured path segments
+            for i in range(len(enemy_path) - 1):
+                start_pos = enemy_path[i]
+                end_pos = enemy_path[i + 1]
+                
+                if path_texture:
+                    # Render textured path segment
+                    self._render_textured_path_segment(start_pos, end_pos, path_texture, PATH_WIDTH)
+                else:
+                    # Fallback to colored lines if texture not available
+                    pygame.draw.line(self.screen, path_color, start_pos, end_pos, PATH_WIDTH)
+                
+                # Add colored outline for better visibility
+                pygame.draw.line(self.screen, path_color_dark, start_pos, end_pos, 2)
+                
+            # Draw waypoint circles
+            for i, waypoint in enumerate(enemy_path):
+                if i == 0:
+                    # Start point - green circle with colored border
+                    pygame.draw.circle(self.screen, (0, 255, 0), waypoint, WAYPOINT_RADIUS + 2)
+                    pygame.draw.circle(self.screen, path_color, waypoint, WAYPOINT_RADIUS + 2, 2)
+                elif i == len(enemy_path) - 1:
+                    # End point (castle target) - red circle with colored border
+                    pygame.draw.circle(self.screen, (255, 0, 0), waypoint, WAYPOINT_RADIUS + 2)
+                    pygame.draw.circle(self.screen, path_color, waypoint, WAYPOINT_RADIUS + 2, 2)
+                else:
+                    # Regular waypoints - colored circles
+                    pygame.draw.circle(self.screen, path_color, waypoint, WAYPOINT_RADIUS)
+                    pygame.draw.circle(self.screen, path_color_dark, waypoint, WAYPOINT_RADIUS, 2)
+                    
+    def _render_textured_path_segment(self, start_pos, end_pos, texture, path_width):
+        """Render a textured path segment by tiling texture along the path."""
+        import math
+        
+        # Calculate segment direction and length
+        dx = end_pos[0] - start_pos[0]
+        dy = end_pos[1] - start_pos[1] 
+        segment_length = math.sqrt(dx**2 + dy**2)
+        
+        if segment_length == 0:
+            return
+            
+        # Normalize direction
+        dir_x = dx / segment_length
+        dir_y = dy / segment_length
+        
+        # Calculate perpendicular for width
+        perp_x = -dir_y
+        perp_y = dir_x
+        
+        # Get texture dimensions
+        texture_width = texture.get_width()
+        texture_height = texture.get_height()
+        
+        # Calculate how many texture tiles we need along the path
+        tile_count = max(1, int(segment_length / texture_width) + 1)
+        tile_step = segment_length / tile_count
+        
+        # Render texture tiles along the path
+        for i in range(tile_count):
+            # Calculate position along the path
+            progress = i / tile_count
+            tile_x = start_pos[0] + progress * dx
+            tile_y = start_pos[1] + progress * dy
+            
+            # Create rotated and scaled texture tile
+            # Calculate rotation angle
+            angle = math.degrees(math.atan2(dy, dx))
+            
+            # Scale texture to match path width
+            scale_factor = path_width / texture_height
+            scaled_width = int(texture_width * scale_factor)
+            scaled_height = int(texture_height * scale_factor)
+            
+            if scaled_width > 0 and scaled_height > 0:
+                # Scale texture
+                scaled_texture = pygame.transform.scale(texture, (scaled_width, scaled_height))
+                
+                # Rotate texture to match path direction
+                rotated_texture = pygame.transform.rotate(scaled_texture, -angle)
+                
+                # Position the tile
+                tile_rect = rotated_texture.get_rect()
+                tile_rect.center = (int(tile_x), int(tile_y))
+                
+                # Blit the textured tile
+                self.screen.blit(rotated_texture, tile_rect)
         
     def _render_path_no_build_zones(self):
-        """Render semi-transparent no-build zones around the enemy path."""
-        if len(ENEMY_PATH) < 2:
+        """Render semi-transparent no-build zones around all enemy paths."""
+        if not ENEMY_PATHS:
             return
             
         # Create a surface for the no-build zones with alpha transparency
@@ -547,38 +744,60 @@ class GameEngine:
         # Define no-build zone width (same as tower placement logic)
         no_build_width = PATH_WIDTH // 2 + TOWER_SIZE // 2 + 10  # Same as tower placement check
         
-        # Draw no-build zones for each path segment
-        for i in range(len(ENEMY_PATH) - 1):
-            start_pos = ENEMY_PATH[i]
-            end_pos = ENEMY_PATH[i + 1]
+        # Draw no-build zones for each path
+        for path_index, enemy_path in enumerate(ENEMY_PATHS):
+            if len(enemy_path) < 2:
+                continue
+                
+            # Use different alpha values for different paths to distinguish them
+            alpha_values = [60, 50, 40]  # Different transparency for each path
+            alpha = alpha_values[path_index] if path_index < len(alpha_values) else 45
             
-            # Calculate the vector along the path segment
-            dx = end_pos[0] - start_pos[0]
-            dy = end_pos[1] - start_pos[1]
-            length = (dx**2 + dy**2)**0.5
-            
-            if length > 0:
-                # Normalize the direction vector
-                dx_norm = dx / length
-                dy_norm = dy / length
+            # Draw no-build zones for each path segment
+            for i in range(len(enemy_path) - 1):
+                start_pos = enemy_path[i]
+                end_pos = enemy_path[i + 1]
                 
-                # Calculate perpendicular vector for width
-                perp_x = -dy_norm * no_build_width
-                perp_y = dx_norm * no_build_width
+                # Calculate the vector along the path segment
+                dx = end_pos[0] - start_pos[0]
+                dy = end_pos[1] - start_pos[1]
+                length = (dx**2 + dy**2)**0.5
                 
-                # Create rectangle points for the no-build zone
-                points = [
-                    (start_pos[0] + perp_x, start_pos[1] + perp_y),
-                    (start_pos[0] - perp_x, start_pos[1] - perp_y),
-                    (end_pos[0] - perp_x, end_pos[1] - perp_y),
-                    (end_pos[0] + perp_x, end_pos[1] + perp_y)
-                ]
-                
-                # Draw semi-transparent red zone
-                pygame.draw.polygon(no_build_surface, (255, 0, 0, 60), points)
+                if length > 0:
+                    # Normalize the direction vector
+                    dx_norm = dx / length
+                    dy_norm = dy / length
+                    
+                    # Calculate perpendicular vector for width
+                    perp_x = -dy_norm * no_build_width
+                    perp_y = dx_norm * no_build_width
+                    
+                    # Create rectangle points for the no-build zone
+                    points = [
+                        (start_pos[0] + perp_x, start_pos[1] + perp_y),
+                        (start_pos[0] - perp_x, start_pos[1] - perp_y),
+                        (end_pos[0] - perp_x, end_pos[1] - perp_y),
+                        (end_pos[0] + perp_x, end_pos[1] + perp_y)
+                    ]
+                    
+                    # Draw semi-transparent red zone
+                    pygame.draw.polygon(no_build_surface, (255, 0, 0, alpha), points)
         
         # Blit the no-build zones to the main screen
         self.screen.blit(no_build_surface, (0, 0))
+        
+    def _render_environment_decorations(self):
+        """Render environment decorations like trees and rocks."""
+        for decoration in self.decorations:
+            sprite = decoration['sprite']
+            x = decoration['x']
+            y = decoration['y']
+            
+            # Draw the decoration sprite
+            if sprite:
+                sprite_rect = sprite.get_rect()
+                sprite_rect.center = (x, y)
+                self.screen.blit(sprite, sprite_rect)
         
     def _cleanup(self):
         """Clean up resources."""

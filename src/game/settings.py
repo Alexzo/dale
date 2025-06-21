@@ -82,8 +82,11 @@ WAVE_ENEMY_COUNT_BASE = 5
 WAVE_ENEMY_COUNT_MULTIPLIER = 1.2
 WAVE_DELAY = 5.0  # seconds between waves (reduced for testing)
 
-# Enemy Path System - Updated to target the new castle position
-ENEMY_PATH = [
+# Enemy Path System - Multiple routes targeting different parts of the castle
+# Each route targets a different section of the castle for varied gameplay
+
+# Route 1: Center attack (original route)
+ENEMY_PATH_CENTER = [
     (50, 150),       # Start: Left side entrance
     (200, 150),      # Move right (horizontal)
     (200, 80),       # Turn up (vertical) 
@@ -95,11 +98,61 @@ ENEMY_PATH = [
     (600, 320),      # Turn up toward castle (vertical)
     (900, 320),      # Move right to castle approach (horizontal)
     (1000, 320),     # Get closer to castle (horizontal)
-    (CASTLE_X, CASTLE_Y)  # Final: New castle center position
+    (CASTLE_X, CASTLE_Y)  # Final: Castle center position
+]
+
+# Route 2: Top attack (targets upper part of castle)
+ENEMY_PATH_TOP = [
+    (50, 50),        # Start: Left side, upper entrance
+    (300, 50),       # Move right along top edge (horizontal)
+    (300, 150),      # Turn down (vertical)
+    (600, 150),      # Move right toward castle (horizontal)
+    (600, 100),      # Turn up toward castle top (vertical)
+    (850, 100),      # Move right across battlefield (horizontal)
+    (850, 180),      # Turn down toward castle (vertical)
+    (950, 180),      # Get closer to castle (horizontal)
+    (950, 150),      # Move up to target top (vertical)
+    (1050, 150),     # Close approach to castle (horizontal)
+    (CASTLE_X, CASTLE_Y - CASTLE_HEIGHT//3)  # Final: Castle top section
+]
+
+# Route 3: Bottom attack (targets lower part of castle)
+ENEMY_PATH_BOTTOM = [
+    (50, 600),       # Start: Left side, lower entrance
+    (250, 600),      # Move right along bottom (horizontal)
+    (250, 500),      # Turn up (vertical)
+    (450, 500),      # Move right (horizontal)
+    (450, 550),      # Turn down (vertical)
+    (700, 550),      # Move right toward castle area (horizontal)
+    (700, 450),      # Turn up (vertical)
+    (850, 450),      # Move right (horizontal)
+    (850, 500),      # Turn down toward castle bottom (vertical)
+    (950, 500),      # Get closer (horizontal)
+    (1050, 500),     # Final approach (horizontal)
+    (CASTLE_X, CASTLE_Y + CASTLE_HEIGHT//3)  # Final: Castle bottom section
+]
+
+# All enemy paths in a list for easy access
+ENEMY_PATHS = [ENEMY_PATH_CENTER, ENEMY_PATH_TOP, ENEMY_PATH_BOTTOM]
+
+# Keep original ENEMY_PATH for backward compatibility
+ENEMY_PATH = ENEMY_PATH_CENTER
+
+# Path colors for visualization (different color for each route)
+PATH_COLORS = [
+    (255, 255, 0),   # Yellow for center route
+    (0, 255, 255),   # Cyan for top route  
+    (255, 0, 255),   # Magenta for bottom route
+]
+
+# Path texture materials for each route
+PATH_TEXTURES = [
+    'path_dirt',     # Dirt road for center route
+    'path_stone',    # Stone path for top route
+    'path_grass',    # Grass trail for bottom route
 ]
 
 # Path visualization
-PATH_COLOR = (255, 255, 0, 128)  # Semi-transparent yellow
 PATH_WIDTH = 15
 WAYPOINT_RADIUS = 8
 

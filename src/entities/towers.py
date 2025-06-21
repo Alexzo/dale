@@ -168,25 +168,26 @@ class TowerManager:
         return True
         
     def _is_too_close_to_path(self, tower_x: float, tower_y: float) -> bool:
-        """Check if tower position is too close to the enemy path."""
+        """Check if tower position is too close to any enemy path."""
         # Define minimum distance from path (path width + tower size + buffer)
         min_distance = PATH_WIDTH // 2 + TOWER_SIZE // 2 + 10  # 10 pixel buffer
         
-        # Check distance to each path segment
-        for i in range(len(ENEMY_PATH) - 1):
-            start_point = ENEMY_PATH[i]
-            end_point = ENEMY_PATH[i + 1]
-            
-            # Calculate distance from tower position to this path segment
-            distance = self._point_to_line_segment_distance(
-                tower_x, tower_y,
-                start_point[0], start_point[1],
-                end_point[0], end_point[1]
-            )
-            
-            if distance < min_distance:
-                return True  # Too close to path
+        # Check distance to each path segment for all enemy paths
+        for enemy_path in ENEMY_PATHS:
+            for i in range(len(enemy_path) - 1):
+                start_point = enemy_path[i]
+                end_point = enemy_path[i + 1]
                 
+                # Calculate distance from tower position to this path segment
+                distance = self._point_to_line_segment_distance(
+                    tower_x, tower_y,
+                    start_point[0], start_point[1],
+                    end_point[0], end_point[1]
+                )
+                
+                if distance < min_distance:
+                    return True  # Too close to any path
+                    
         return False  # Safe distance from all path segments
         
     def _point_to_line_segment_distance(self, px: float, py: float, 

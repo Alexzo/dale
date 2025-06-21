@@ -12,7 +12,7 @@ from ..game.settings import *
 class Enemy:
     """Base enemy class."""
     
-    def __init__(self, x: float, y: float, sprite_manager):
+    def __init__(self, x: float, y: float, sprite_manager, path_route=None):
         """Initialize enemy."""
         self.x = x
         self.y = y
@@ -31,9 +31,14 @@ class Enemy:
         self.velocity_x = 0.0
         self.velocity_y = 0.0
         
-        # Waypoint system
+        # Waypoint system - use assigned route or default to center route
         self.current_waypoint = 0
-        self.path = ENEMY_PATH.copy()  # Copy the global path
+        if path_route is not None:
+            self.path = path_route.copy()
+            self.route_index = ENEMY_PATHS.index(path_route) if path_route in ENEMY_PATHS else 0
+        else:
+            self.path = ENEMY_PATH.copy()  # Default to center route
+            self.route_index = 0
         
         # Sprite
         self.sprite = sprite_manager.get_sprite('enemy')
@@ -174,16 +179,21 @@ class EnemyManager:
         self.sprite_manager = sprite_manager
         self.state_manager = state_manager
         
-        # Spawn point at the beginning of the enemy path
-        self.spawn_point = ENEMY_PATH[0] if ENEMY_PATH else (50, 100)
+        # Spawn points for each route (starting point of each path)
+        self.spawn_points = [path[0] for path in ENEMY_PATHS] if ENEMY_PATHS else [(50, 100)]
         
     def spawn_wave(self, enemy_count: int):
-        """Spawn a wave of enemies."""
+        """Spawn a wave of enemies using multiple routes."""
         enemies = self.state_manager.entities['enemies']
         
         for i in range(enemy_count):
-            # Use the path's starting point
-            spawn_x, spawn_y = self.spawn_point
+            # Randomly select a route for this enemy
+            route_index = random.randint(0, len(ENEMY_PATHS) - 1)
+            selected_path = ENEMY_PATHS[route_index]
+            spawn_point = self.spawn_points[route_index]
+            
+            # Use the selected path's starting point
+            spawn_x, spawn_y = spawn_point
             
             # Add small random offset to prevent enemies from overlapping
             spawn_x += random.randint(-30, 30)
@@ -193,8 +203,8 @@ class EnemyManager:
             spawn_x = max(0, min(SCREEN_WIDTH, spawn_x))
             spawn_y = max(0, min(SCREEN_HEIGHT - HUD_HEIGHT, spawn_y))
             
-            # Create enemy
-            enemy = Enemy(spawn_x, spawn_y, self.sprite_manager)
+            # Create enemy with the selected route
+            enemy = Enemy(spawn_x, spawn_y, self.sprite_manager, selected_path)
             
             # Initialize waypoint system (enemy will start moving to first waypoint)
             castle_data = self.state_manager.castle_data
@@ -202,6 +212,8 @@ class EnemyManager:
             
             enemies.append(enemy)
             
+        print(f"🏹 Spawned {enemy_count} enemies across {len(ENEMY_PATHS)} different routes!")
+        
     def update(self, dt: float, castle_data: Dict[str, Any]):
         """Update all enemies."""
         enemies = self.state_manager.entities['enemies']
