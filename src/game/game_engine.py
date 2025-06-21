@@ -67,7 +67,7 @@ class GameEngine:
         self.running = True
         
         self._initialize_game_objects()
-        self._generate_environment_decorations()
+        # self._generate_environment_decorations()  # DISABLED FOR NOW - focusing on path textures only
         
     def _initialize_game_objects(self):
         """Initialize all game objects."""
@@ -257,6 +257,8 @@ class GameEngine:
                 self._try_summon_ally()
             elif event.key in KEY_BUILD_TOWER:
                 self._try_build_tower()
+            elif event.key == pygame.K_u:  # U key for upgrade
+                self._try_upgrade_selected_tower()
             elif event.key in KEY_TOGGLE_BUILD_ZONES:
                 self.show_build_zones = not self.show_build_zones
                 status = "ON" if self.show_build_zones else "OFF"
@@ -289,10 +291,30 @@ class GameEngine:
     def _handle_left_click(self, pos):
         """Handle left mouse click during gameplay."""
         # Check if clicking on UI elements first
-        if self.hud.handle_click(pos):  # type: ignore
+        hud_action = self.hud.handle_click(pos)  # type: ignore
+        if hud_action == "summon_ally":
+            self._try_summon_ally()
+            return
+        elif hud_action == "build_tower":
+            self._try_build_tower()
+            return
+        elif hud_action == "upgrade_tower":
+            self._upgrade_selected_tower()
+            return
+        elif hud_action is True:  # Clicked in HUD but no action
             return
             
-        # Otherwise, try to build tower at position
+        # Check if clicking on a tower to select it
+        tower = self.tower_manager.get_tower_near_position(pos[0], pos[1])  # type: ignore
+        if tower:
+            self.hud.set_selected_tower(tower)  # type: ignore
+            print(f"🏗️ Selected Level {tower.level} Tower (Health: {tower.health}/{tower.max_health})")
+            return
+            
+        # Clear tower selection if clicking elsewhere
+        self.hud.clear_tower_selection()  # type: ignore
+            
+        # Try to build tower at position
         grid_x = pos[0] // TILE_SIZE
         grid_y = pos[1] // TILE_SIZE
         
@@ -309,6 +331,9 @@ class GameEngine:
                 print("❌ Cannot build tower: Not enough essence!")
             else:
                 print("❌ Cannot build tower: Invalid location!")
+        else:
+            # Clear tower selection after building
+            self.hud.clear_tower_selection()  # type: ignore
         
     def _try_summon_ally(self):
         """Try to summon an ally near the player."""
@@ -326,6 +351,34 @@ class GameEngine:
             else:
                 # Refund essence if tower couldn't be built
                 self.state_manager.add_essence(ARROW_TOWER_COST)
+                
+    def _try_upgrade_selected_tower(self):
+        """Try to upgrade the currently selected tower using U key."""
+        selected_tower = self.hud.selected_tower  # type: ignore
+        if selected_tower is None:
+            print("❌ No tower selected! Click on a tower first.")
+            return
+            
+        if not selected_tower.can_upgrade():
+            print("❌ Tower is already at maximum level!")
+            return
+            
+        upgrade_cost = selected_tower.get_upgrade_cost()
+        if self.state_manager.player_data['essence'] < upgrade_cost:
+            print(f"❌ Not enough essence! Need {upgrade_cost}, have {self.state_manager.player_data['essence']}")
+            return
+            
+        # Perform the upgrade
+        if self.tower_manager.try_upgrade_tower(selected_tower):  # type: ignore
+            print(f"✅ Tower upgraded to level {selected_tower.level}!")
+        else:
+            print("❌ Tower upgrade failed!")
+            
+    def _upgrade_selected_tower(self):
+        """Upgrade the currently selected tower (called from HUD button)."""
+        selected_tower = self.hud.selected_tower  # type: ignore
+        if selected_tower and self.tower_manager.try_upgrade_tower(selected_tower):  # type: ignore
+            print(f"✅ Tower upgraded to level {selected_tower.level}!")
                 
     def _update(self, dt):
         """Update game logic."""
@@ -525,7 +578,39 @@ class GameEngine:
         # Reinitialize game objects with saved state
         self._initialize_game_objects()
         
+        # Recreate saved entities with correct levels
+        saved_entity_data = self.state_manager.get_saved_entity_data()
+        if saved_entity_data:
+            self._recreate_saved_entities(saved_entity_data)
+        
         print(f"🎮 Continuing game from wave {saved_game['wave_number']}!")
+        
+    def _recreate_saved_entities(self, saved_data: Dict[str, Any]):
+        """Recreate towers and allies from saved data with correct levels."""
+        from ..entities.towers import ArrowTower
+        from ..entities.allies import ElfWarrior
+        
+        # Clear existing entities first
+        self.state_manager.entities['towers'].clear()
+        self.state_manager.entities['allies'].clear()
+        self.tower_manager.occupied_positions.clear()  # type: ignore
+        
+        # Recreate towers with correct levels
+        for tower_data in saved_data.get('towers', []):
+            # Use grid position and level from saved data
+            tower_level = tower_data.get('level', 1)
+            tower = ArrowTower(tower_data['grid_x'], tower_data['grid_y'], self.sprite_manager, level=tower_level)
+            tower.health = tower_data.get('health', tower.health)
+            self.state_manager.entities['towers'].append(tower)
+            self.tower_manager.occupied_positions.add((tower.grid_x, tower.grid_y))  # type: ignore
+            
+        # Recreate allies
+        for ally_data in saved_data.get('allies', []):
+            ally = ElfWarrior(ally_data['x'], ally_data['y'], self.sprite_manager)
+            ally.health = ally_data.get('health', ally.health)
+            self.state_manager.entities['allies'].append(ally)
+            
+        print(f"🏗️ Recreated {len(saved_data.get('towers', []))} towers and {len(saved_data.get('allies', []))} allies from save")
         
     def _render(self):
         """Render the game."""
@@ -547,6 +632,9 @@ class GameEngine:
         
     def _render_gameplay(self):
         """Render gameplay elements."""
+        # Render terrain background first (appears behind everything)
+        self._render_terrain_background()
+        
         # Render enemy path first (so it appears under other elements)
         self._render_enemy_path()
         
@@ -554,8 +642,8 @@ class GameEngine:
         if self.show_build_zones:
             self._render_path_no_build_zones()
             
-        # Render environment decorations (behind gameplay elements)
-        self._render_environment_decorations()
+        # Render environment decorations (behind gameplay elements) - DISABLED FOR NOW
+        # self._render_environment_decorations()
         
         # Render castle (now much larger)
         castle_rect = pygame.Rect(
@@ -645,38 +733,28 @@ class GameEngine:
             # Get texture from sprite manager
             path_texture = self.sprite_manager.get_sprite(texture_name)
             
+            # Debug: Print texture info for first time only
+            if not hasattr(self, '_texture_debug_printed'):
+                print(f"🎨 Route {path_index + 1}: Using texture '{texture_name}' - {'Found' if path_texture else 'NOT FOUND'}")
+                if path_texture:
+                    print(f"   Texture size: {path_texture.get_width()}x{path_texture.get_height()}")
+                if path_index == len(ENEMY_PATHS) - 1:  # Last path
+                    self._texture_debug_printed = True
+            
             # Draw textured path segments
             for i in range(len(enemy_path) - 1):
                 start_pos = enemy_path[i]
                 end_pos = enemy_path[i + 1]
                 
                 if path_texture:
-                    # Render textured path segment
-                    self._render_textured_path_segment(start_pos, end_pos, path_texture, PATH_WIDTH)
+                    # Render simple textured path segment
+                    self._render_simple_textured_path(start_pos, end_pos, path_texture, PATH_WIDTH)
                 else:
                     # Fallback to colored lines if texture not available
                     pygame.draw.line(self.screen, path_color, start_pos, end_pos, PATH_WIDTH)
-                
-                # Add colored outline for better visibility
-                pygame.draw.line(self.screen, path_color_dark, start_pos, end_pos, 2)
-                
-            # Draw waypoint circles
-            for i, waypoint in enumerate(enemy_path):
-                if i == 0:
-                    # Start point - green circle with colored border
-                    pygame.draw.circle(self.screen, (0, 255, 0), waypoint, WAYPOINT_RADIUS + 2)
-                    pygame.draw.circle(self.screen, path_color, waypoint, WAYPOINT_RADIUS + 2, 2)
-                elif i == len(enemy_path) - 1:
-                    # End point (castle target) - red circle with colored border
-                    pygame.draw.circle(self.screen, (255, 0, 0), waypoint, WAYPOINT_RADIUS + 2)
-                    pygame.draw.circle(self.screen, path_color, waypoint, WAYPOINT_RADIUS + 2, 2)
-                else:
-                    # Regular waypoints - colored circles
-                    pygame.draw.circle(self.screen, path_color, waypoint, WAYPOINT_RADIUS)
-                    pygame.draw.circle(self.screen, path_color_dark, waypoint, WAYPOINT_RADIUS, 2)
-                    
-    def _render_textured_path_segment(self, start_pos, end_pos, texture, path_width):
-        """Render a textured path segment by tiling texture along the path."""
+        
+    def _render_simple_textured_path(self, start_pos, end_pos, texture, path_width):
+        """Render a simple textured path segment by tiling texture rectangles."""
         import math
         
         # Calculate segment direction and length
@@ -687,51 +765,44 @@ class GameEngine:
         if segment_length == 0:
             return
             
-        # Normalize direction
-        dir_x = dx / segment_length
-        dir_y = dy / segment_length
-        
-        # Calculate perpendicular for width
-        perp_x = -dir_y
-        perp_y = dir_x
-        
         # Get texture dimensions
         texture_width = texture.get_width()
         texture_height = texture.get_height()
         
-        # Calculate how many texture tiles we need along the path
-        tile_count = max(1, int(segment_length / texture_width) + 1)
-        tile_step = segment_length / tile_count
+        # Scale texture to match path width
+        scale_factor = path_width / texture_height
+        scaled_width = max(1, int(texture_width * scale_factor))
+        scaled_height = max(1, int(texture_height * scale_factor))
         
-        # Render texture tiles along the path
-        for i in range(tile_count):
-            # Calculate position along the path
-            progress = i / tile_count
+        # Scale texture
+        scaled_texture = pygame.transform.scale(texture, (scaled_width, scaled_height))
+        
+        # Calculate step size (use scaled width for continuous tiling)
+        step_size = scaled_width * 0.9  # Slight overlap to prevent gaps
+        
+        # Calculate number of steps needed
+        num_steps = max(1, int(segment_length / step_size) + 1)
+        
+        # Render texture tiles along the path with continuous coverage
+        for i in range(num_steps):
+            # Calculate position along the path using step size
+            distance_along_path = i * step_size
+            
+            # Don't go beyond the segment
+            if distance_along_path > segment_length:
+                distance_along_path = segment_length
+                
+            # Calculate position
+            progress = distance_along_path / segment_length if segment_length > 0 else 0
             tile_x = start_pos[0] + progress * dx
             tile_y = start_pos[1] + progress * dy
             
-            # Create rotated and scaled texture tile
-            # Calculate rotation angle
-            angle = math.degrees(math.atan2(dy, dx))
+            # Position the tile
+            tile_rect = scaled_texture.get_rect()
+            tile_rect.center = (int(tile_x), int(tile_y))
             
-            # Scale texture to match path width
-            scale_factor = path_width / texture_height
-            scaled_width = int(texture_width * scale_factor)
-            scaled_height = int(texture_height * scale_factor)
-            
-            if scaled_width > 0 and scaled_height > 0:
-                # Scale texture
-                scaled_texture = pygame.transform.scale(texture, (scaled_width, scaled_height))
-                
-                # Rotate texture to match path direction
-                rotated_texture = pygame.transform.rotate(scaled_texture, -angle)
-                
-                # Position the tile
-                tile_rect = rotated_texture.get_rect()
-                tile_rect.center = (int(tile_x), int(tile_y))
-                
-                # Blit the textured tile
-                self.screen.blit(rotated_texture, tile_rect)
+            # Blit the textured tile
+            self.screen.blit(scaled_texture, tile_rect)
         
     def _render_path_no_build_zones(self):
         """Render semi-transparent no-build zones around all enemy paths."""
@@ -798,6 +869,96 @@ class GameEngine:
                 sprite_rect = sprite.get_rect()
                 sprite_rect.center = (x, y)
                 self.screen.blit(sprite, sprite_rect)
+        
+    def _render_terrain_background(self):
+        """Render the terrain background using grass and dirt tiles."""
+        import random
+        
+        # Get terrain textures
+        grass_texture = self.sprite_manager.get_sprite('grass_tile')
+        dirt_texture = self.sprite_manager.get_sprite('dirt_tile')
+        
+        # If textures don't exist, create simple procedural ones
+        if not grass_texture:
+            grass_texture = self.sprite_manager.get_sprite('path_grass')
+        if not dirt_texture:
+            dirt_texture = self.sprite_manager.get_sprite('path_dirt')
+            
+        if not grass_texture and not dirt_texture:
+            return  # No textures available
+            
+        # Use a reasonable tile size for terrain
+        tile_size = 64
+        
+        # Calculate how many tiles we need
+        tiles_x = (SCREEN_WIDTH // tile_size) + 2
+        tiles_y = ((SCREEN_HEIGHT - HUD_HEIGHT) // tile_size) + 2
+        
+        # Castle area for avoiding terrain rendering
+        castle_data = self.state_manager.castle_data
+        castle_left = castle_data['x'] - CASTLE_WIDTH//2 - 20
+        castle_right = castle_data['x'] + CASTLE_WIDTH//2 + 20
+        castle_top = castle_data['y'] - CASTLE_HEIGHT//2 - 20
+        castle_bottom = castle_data['y'] + CASTLE_HEIGHT//2 + 20
+        
+        # Set random seed for consistent terrain pattern
+        random.seed(42)  # Fixed seed for consistent terrain
+        
+        # Render terrain tiles
+        for tile_x in range(tiles_x):
+            for tile_y in range(tiles_y):
+                # Calculate tile position
+                x = tile_x * tile_size
+                y = tile_y * tile_size
+                
+                # Skip if in castle area
+                if (x >= castle_left and x <= castle_right and 
+                    y >= castle_top and y <= castle_bottom):
+                    continue
+                    
+                # Skip if below HUD area
+                if y >= SCREEN_HEIGHT - HUD_HEIGHT:
+                    continue
+                
+                # Choose texture based on position and some randomness
+                # Create natural patches of grass and dirt
+                noise_value = self._simple_noise(tile_x, tile_y)
+                
+                # Bias towards grass (70% grass, 30% dirt for natural look)
+                if noise_value > 0.3:
+                    current_texture = grass_texture
+                else:
+                    current_texture = dirt_texture
+                    
+                # Use fallback if texture not available
+                if not current_texture:
+                    current_texture = dirt_texture if grass_texture else grass_texture
+                    
+                if current_texture:
+                    # Scale texture to tile size
+                    scaled_texture = pygame.transform.scale(current_texture, (tile_size, tile_size))
+                    
+                    # Position the tile
+                    tile_rect = scaled_texture.get_rect()
+                    tile_rect.topleft = (x, y)
+                    
+                    # Render the terrain tile
+                    self.screen.blit(scaled_texture, tile_rect)
+        
+        # Reset random seed
+        random.seed()
+        
+    def _simple_noise(self, x: int, y: int) -> float:
+        """Generate simple noise for terrain variation."""
+        import math
+        
+        # Simple pseudo-noise function for natural terrain patterns
+        value = math.sin(x * 0.3) * math.cos(y * 0.3)
+        value += math.sin(x * 0.1 + y * 0.1) * 0.5
+        value += math.sin(x * 0.05) * math.cos(y * 0.07) * 0.3
+        
+        # Normalize to 0-1 range
+        return (value + 2) / 4
         
     def _cleanup(self):
         """Clean up resources."""

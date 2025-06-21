@@ -7,12 +7,13 @@ import math
 from typing import List, Optional
 
 from ..game.settings import *
+from ..game.constants import *
 from .projectiles import Arrow
 
 class ArrowTower:
     """Arrow tower that shoots arrows at enemies."""
     
-    def __init__(self, grid_x: int, grid_y: int, sprite_manager):
+    def __init__(self, grid_x: int, grid_y: int, sprite_manager, level: int = TOWER_STARTING_LEVEL):
         """Initialize arrow tower."""
         self.grid_x = grid_x
         self.grid_y = grid_y
@@ -20,26 +21,112 @@ class ArrowTower:
         self.y = grid_y * TILE_SIZE + TILE_SIZE // 2
         self.sprite_manager = sprite_manager
         
-        # Tower stats
-        self.damage = ARROW_TOWER_DAMAGE
-        self.range = ARROW_TOWER_RANGE
-        self.fire_rate = ARROW_TOWER_FIRE_RATE
+        # Tower level and upgrade system
+        self.level = level
+        self.max_health = self._calculate_health()
+        self.health = self.max_health
+        
+        # Tower stats (calculated based on level)
+        self.damage = self._calculate_damage()
+        self.range = TOWER_BASE_RANGE  # Range doesn't change with level
+        self.fire_rate = self._calculate_fire_rate()
         self.size = TOWER_SIZE
         
         # Firing state
         self.last_fire_time = 0.0
         self.target = None
         
-        # Sprite
-        self.sprite = sprite_manager.get_sprite('arrow_tower')
-        if not self.sprite:
-            # Fallback sprite
-            self.sprite = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
-            pygame.draw.rect(self.sprite, BROWN, (0, 0, self.size, self.size))
-            pygame.draw.rect(self.sprite, BLACK, (0, 0, self.size, self.size), 2)
+        # Sprite (color changes with level)
+        self.sprite = self._create_level_sprite()
             
         # Collision rect
         self.rect = pygame.Rect(self.x - self.size//2, self.y - self.size//2, self.size, self.size)
+        
+    def _calculate_health(self) -> int:
+        """Calculate tower health based on level."""
+        return TOWER_BASE_HEALTH + (self.level - 1) * TOWER_HEALTH_PER_LEVEL
+        
+    def _calculate_damage(self) -> int:
+        """Calculate tower damage based on level."""
+        return TOWER_BASE_DAMAGE + (self.level - 1) * TOWER_DAMAGE_BONUS_PER_LEVEL
+        
+    def _calculate_fire_rate(self) -> float:
+        """Calculate tower fire rate based on level."""
+        # Fire rate increases every 2 levels
+        speed_bonus_levels = (self.level - 1) // 2
+        return TOWER_BASE_ATTACK_SPEED + speed_bonus_levels * TOWER_ATTACK_SPEED_BONUS_EVERY_2_LEVELS
+        
+    def _create_level_sprite(self) -> pygame.Surface:
+        """Create tower sprite with level-appropriate color."""
+        # Try to get base sprite first
+        base_sprite = self.sprite_manager.get_sprite('arrow_tower')
+        
+        if base_sprite:
+            # Tint the sprite based on level
+            level_color = TOWER_LEVEL_COLORS.get(self.level, TOWER_LEVEL_COLORS[1])
+            sprite = base_sprite.copy()
+            
+            # Create a colored overlay
+            color_overlay = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+            color_overlay.fill((*level_color, 100))  # Semi-transparent color
+            sprite.blit(color_overlay, (0, 0), special_flags=pygame.BLEND_MULT)
+            
+            return sprite
+        else:
+            # Fallback sprite with level color
+            sprite = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+            level_color = TOWER_LEVEL_COLORS.get(self.level, TOWER_LEVEL_COLORS[1])
+            
+            pygame.draw.rect(sprite, level_color, (0, 0, self.size, self.size))
+            pygame.draw.rect(sprite, BLACK, (0, 0, self.size, self.size), 2)
+            
+            # Add level indicator and arrow symbol
+            pygame.draw.polygon(sprite, YELLOW, [
+                (self.size//2, 8),
+                (self.size//2 - 4, 16),
+                (self.size//2 + 4, 16)
+            ])
+            
+            return sprite
+            
+    def can_upgrade(self) -> bool:
+        """Check if tower can be upgraded."""
+        return self.level < TOWER_MAX_LEVEL
+        
+    def get_upgrade_cost(self) -> int:
+        """Get the essence cost to upgrade to next level."""
+        if not self.can_upgrade():
+            return 0
+        return TOWER_UPGRADE_COSTS.get(self.level + 1, 0)
+        
+    def upgrade(self) -> bool:
+        """Upgrade the tower to the next level."""
+        if not self.can_upgrade():
+            return False
+            
+        self.level += 1
+        
+        # Update stats
+        old_max_health = self.max_health
+        self.max_health = self._calculate_health()
+        self.health += (self.max_health - old_max_health)  # Heal by health increase amount
+        self.damage = self._calculate_damage()
+        self.fire_rate = self._calculate_fire_rate()
+        
+        # Update sprite appearance
+        self.sprite = self._create_level_sprite()
+        
+        print(f"🔧 Tower upgraded to level {self.level}! Damage: {self.damage}, Health: {self.health}, Fire Rate: {self.fire_rate:.1f}")
+        return True
+        
+    def take_damage(self, damage: int):
+        """Tower takes damage (for future enemy mechanics)."""
+        self.health -= damage
+        self.health = max(0, self.health)
+        
+    def is_alive(self) -> bool:
+        """Check if tower is still functional."""
+        return self.health > 0
         
     def find_target(self, enemies: List) -> Optional[object]:
         """Find the closest enemy within range."""
@@ -134,7 +221,42 @@ class TowerManager:
         self.state_manager.entities['towers'].append(tower)
         self.occupied_positions.add((grid_x, grid_y))
         
+        # Track tower built for stats
+        self.state_manager.game_data['towers_built'] += 1
+        self.state_manager.add_score(10)  # Bonus points for building
+        
         return True
+        
+    def try_upgrade_tower(self, tower: ArrowTower) -> bool:
+        """Try to upgrade a tower."""
+        if not tower.can_upgrade():
+            return False
+            
+        upgrade_cost = tower.get_upgrade_cost()
+        if not self.state_manager.spend_essence(upgrade_cost):
+            return False
+            
+        # Upgrade the tower
+        success = tower.upgrade()
+        if success:
+            self.state_manager.add_score(15)  # Bonus points for upgrading
+            
+        return success
+        
+    def get_tower_at_position(self, grid_x: int, grid_y: int) -> Optional[ArrowTower]:
+        """Get the tower at a specific grid position."""
+        for tower in self.state_manager.entities['towers']:
+            if tower.grid_x == grid_x and tower.grid_y == grid_y:
+                return tower
+        return None
+        
+    def get_tower_near_position(self, x: float, y: float, max_distance: float = 32) -> Optional[ArrowTower]:
+        """Get the tower near a world position."""
+        for tower in self.state_manager.entities['towers']:
+            distance = math.sqrt((tower.x - x)**2 + (tower.y - y)**2)
+            if distance <= max_distance:
+                return tower
+        return None
         
     def _is_valid_position(self, grid_x: int, grid_y: int) -> bool:
         """Check if the grid position is valid for building."""

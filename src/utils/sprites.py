@@ -74,6 +74,9 @@ class SpriteManager:
             else:
                 print(f"⚠️  Could not load {texture_name}, will create procedural texture")
                 
+        # Ensure we have the path textures for the enemy routes
+        self._ensure_path_textures()
+        
     def _load_animations(self):
         """Load character animations."""
         player_animations = self._create_player_animations()
@@ -402,6 +405,28 @@ class SpriteManager:
         except pygame.error as e:
             print(f"Could not load environment texture {name} from {filepath}: {e}")
         return False
+        
+    def _ensure_path_textures(self):
+        """Ensure the essential path textures are available."""
+        print("🛣️  Ensuring path textures are available...")
+        
+        # Essential path textures for the three routes
+        essential_textures = {
+            'path_dirt': (32, 32, self._create_dirt_texture),
+            'path_stone': (32, 32, self._create_stone_texture),
+            'path_grass': (32, 32, self._create_grass_texture),
+            'grass_tile': (64, 64, self._create_grass_texture),  # Larger tiles for terrain
+            'dirt_tile': (64, 64, self._create_dirt_texture)     # Larger tiles for terrain
+        }
+        
+        for texture_name, (width, height, creator_func) in essential_textures.items():
+            if texture_name not in self.sprites:
+                print(f"🎨 Creating {texture_name} texture...")
+                texture = creator_func(width, height)
+                self.sprites[texture_name] = texture
+                self.sprite_rects[texture_name] = texture.get_rect()
+            else:
+                print(f"✅ {texture_name} already available")
         
     def create_procedural_textures(self):
         """Create procedural environment textures as fallbacks."""

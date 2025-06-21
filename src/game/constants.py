@@ -128,3 +128,35 @@ def get_character_health_at_level(level: int) -> int:
 def get_character_attack_at_level(level: int) -> int:
     """Calculate character attack power at a specific level."""
     return CHARACTER_BASE_ATTACK + (level - 1) * CHARACTER_ATTACK_PER_LEVEL 
+
+# Tower upgrade system constants
+TOWER_MAX_LEVEL = 5
+TOWER_STARTING_LEVEL = 1
+
+# Tower upgrade costs (essence cost for each level)
+TOWER_UPGRADE_COSTS = {
+    2: 75,   # Level 1 -> 2: 75 essence
+    3: 100,  # Level 2 -> 3: 100 essence  
+    4: 150,  # Level 3 -> 4: 150 essence
+    5: 200   # Level 4 -> 5: 200 essence
+}
+
+# Tower stat bonuses per level
+TOWER_HEALTH_PER_LEVEL = 25        # +25 health per level
+TOWER_DAMAGE_BONUS_PER_LEVEL = 8   # +8 damage per level
+TOWER_ATTACK_SPEED_BONUS_EVERY_2_LEVELS = 0.2  # +0.2 attacks/sec every 2 levels
+
+# Base tower stats (level 1)
+TOWER_BASE_HEALTH = 100
+TOWER_BASE_DAMAGE = 25      # From settings.py ARROW_TOWER_DAMAGE
+TOWER_BASE_ATTACK_SPEED = 1.0  # From settings.py ARROW_TOWER_FIRE_RATE
+TOWER_BASE_RANGE = 150      # From settings.py ARROW_TOWER_RANGE
+
+# Visual indicators for tower levels
+TOWER_LEVEL_COLORS = {
+    1: (139, 69, 19),    # Brown (basic)
+    2: (160, 82, 45),    # Saddle brown  
+    3: (205, 133, 63),   # Peru
+    4: (218, 165, 32),   # Goldenrod
+    5: (255, 215, 0)     # Gold (max level)
+} 

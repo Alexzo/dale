@@ -7,6 +7,7 @@ from typing import Tuple
 
 from ..game.settings import *
 from ..game.game_state import GameStateManager
+from ..game.constants import *
 
 class HUD:
     """Heads-up display showing game information."""
@@ -27,8 +28,12 @@ class HUD:
         # Button areas
         self.summon_button_rect = pygame.Rect(10, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
         self.tower_button_rect = pygame.Rect(140, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.upgrade_button_rect = pygame.Rect(270, SCREEN_HEIGHT - HUD_HEIGHT + 10, BUTTON_WIDTH, BUTTON_HEIGHT)
         
-    def handle_click(self, pos: Tuple[int, int]) -> bool:
+        # Selected tower (for upgrades)
+        self.selected_tower = None
+        
+    def handle_click(self, pos: Tuple[int, int], action_type=None):
         """Handle mouse clicks on HUD elements."""
         # Check if click is in HUD area
         if not self.hud_rect.collidepoint(pos):
@@ -38,15 +43,31 @@ class HUD:
         if self.summon_button_rect.collidepoint(pos):
             if self.state_manager.spend_essence(ALLY_COST):
                 # Signal to summon ally (handled by game engine)
-                return True
+                return "summon_ally"
                 
         # Check tower button
         if self.tower_button_rect.collidepoint(pos):
             if self.state_manager.spend_essence(ARROW_TOWER_COST):
                 # Signal to build tower (handled by game engine)
-                return True
+                return "build_tower"
+                
+        # Check upgrade button
+        if self.upgrade_button_rect.collidepoint(pos) and self.selected_tower:
+            if self.selected_tower.can_upgrade():
+                upgrade_cost = self.selected_tower.get_upgrade_cost()
+                if self.state_manager.spend_essence(upgrade_cost):
+                    # Signal to upgrade tower (handled by game engine)
+                    return "upgrade_tower"
                 
         return True  # Consumed the click even if no action taken
+        
+    def set_selected_tower(self, tower):
+        """Set the currently selected tower."""
+        self.selected_tower = tower
+        
+    def clear_tower_selection(self):
+        """Clear tower selection."""
+        self.selected_tower = None
         
     def render(self, screen: pygame.Surface):
         """Render the HUD."""
@@ -59,6 +80,7 @@ class HUD:
         self._render_castle_info(screen)
         self._render_game_info(screen)
         self._render_buttons(screen)
+        self._render_tower_info(screen)
         
     def _render_player_info(self, screen: pygame.Surface):
         """Render player information."""
@@ -143,6 +165,29 @@ class HUD:
         text_rect = tower_surface.get_rect(center=self.tower_button_rect.center)
         screen.blit(tower_surface, text_rect)
         
+        # Upgrade tower button (only show if a tower is selected)
+        if self.selected_tower:
+            if self.selected_tower.can_upgrade():
+                upgrade_cost = self.selected_tower.get_upgrade_cost()
+                can_afford = self.state_manager.player_data['essence'] >= upgrade_cost
+                upgrade_color = GOLD if can_afford else (60, 60, 60)
+                pygame.draw.rect(screen, upgrade_color, self.upgrade_button_rect)
+                pygame.draw.rect(screen, WHITE, self.upgrade_button_rect, 2)
+                
+                upgrade_text = f"Upgrade ({upgrade_cost})"
+                upgrade_surface = self.font_small.render(upgrade_text, True, WHITE)
+                text_rect = upgrade_surface.get_rect(center=self.upgrade_button_rect.center)
+                screen.blit(upgrade_surface, text_rect)
+            else:
+                # Tower at max level
+                pygame.draw.rect(screen, (40, 40, 40), self.upgrade_button_rect)
+                pygame.draw.rect(screen, WHITE, self.upgrade_button_rect, 2)
+                
+                max_text = "MAX LEVEL"
+                max_surface = self.font_small.render(max_text, True, WHITE)
+                text_rect = max_surface.get_rect(center=self.upgrade_button_rect.center)
+                screen.blit(max_surface, text_rect)
+        
         # Controls info
         controls_y = SCREEN_HEIGHT - HUD_HEIGHT + 55
         controls_text = [
@@ -150,6 +195,7 @@ class HUD:
             f"Space: Summon Ally ({ALLY_COST} essence)",
             f"E: Build Tower ({ARROW_TOWER_COST} essence)",
             "F/Shift: Attack",
+            "U: Upgrade Tower (select first)",
             "B: Toggle Build Zones"
         ]
         
@@ -157,4 +203,56 @@ class HUD:
         for text in controls_text:
             text_surface = self.font_small.render(text, True, WHITE)
             screen.blit(text_surface, (10, controls_y + y_offset))
-            y_offset += 22 
+            y_offset += 22
+            
+    def _render_tower_info(self, screen: pygame.Surface):
+        """Render selected tower information."""
+        if not self.selected_tower:
+            return
+            
+        # Tower info panel (top right of screen)
+        info_x = SCREEN_WIDTH - 250
+        info_y = 10
+        info_width = 240
+        info_height = 120
+        
+        # Background
+        info_rect = pygame.Rect(info_x, info_y, info_width, info_height)
+        pygame.draw.rect(screen, (40, 40, 40, 180), info_rect)
+        pygame.draw.rect(screen, WHITE, info_rect, 2)
+        
+        # Tower title
+        title_text = f"Tower Level {self.selected_tower.level}"
+        title_surface = self.font_medium.render(title_text, True, TOWER_LEVEL_COLORS[self.selected_tower.level])
+        screen.blit(title_surface, (info_x + 10, info_y + 5))
+        
+        # Tower stats
+        stats_y = info_y + 30
+        stats = [
+            f"Health: {self.selected_tower.health}/{self.selected_tower.max_health}",
+            f"Damage: {self.selected_tower.damage}",
+            f"Fire Rate: {self.selected_tower.fire_rate:.1f}/sec",
+            f"Range: {self.selected_tower.range}"
+        ]
+        
+        for i, stat in enumerate(stats):
+            stat_surface = self.font_small.render(stat, True, WHITE)
+            screen.blit(stat_surface, (info_x + 10, stats_y + i * 18))
+            
+        # Next level preview (if can upgrade)
+        if self.selected_tower.can_upgrade():
+            next_level = self.selected_tower.level + 1
+            preview_y = stats_y + len(stats) * 18 + 5
+            
+            preview_text = f"→ Level {next_level}:"
+            preview_surface = self.font_small.render(preview_text, True, GOLD)
+            screen.blit(preview_surface, (info_x + 10, preview_y))
+            
+            # Calculate next level stats
+            next_damage = TOWER_BASE_DAMAGE + (next_level - 1) * TOWER_DAMAGE_BONUS_PER_LEVEL
+            next_health = TOWER_BASE_HEALTH + (next_level - 1) * TOWER_HEALTH_PER_LEVEL
+            next_fire_rate = TOWER_BASE_ATTACK_SPEED + ((next_level - 1) // 2) * TOWER_ATTACK_SPEED_BONUS_EVERY_2_LEVELS
+            
+            next_stats = f"DMG:{next_damage} HP:{next_health} FR:{next_fire_rate:.1f}"
+            next_surface = self.font_small.render(next_stats, True, GREEN)
+            screen.blit(next_surface, (info_x + 75, preview_y)) 

@@ -32,8 +32,8 @@ class GameStateManager:
         self.castle_data = {
             'health': 500,
             'max_health': 500,
-            'x': settings.CASTLE_X,  # Use new castle position
-            'y': settings.CASTLE_Y
+            'x': getattr(settings, 'CASTLE_X', 1152),  # Use new castle position
+            'y': getattr(settings, 'CASTLE_Y', 320)
         }
         
         self.game_data = {
@@ -149,8 +149,9 @@ class GameStateManager:
         state_data['entities'] = {
             'towers': [
                 {
-                    'x': tower.x,
-                    'y': tower.y,
+                    'grid_x': tower.grid_x,
+                    'grid_y': tower.grid_y,
+                    'level': getattr(tower, 'level', 1),
                     'health': getattr(tower, 'health', 100)
                 } for tower in self.entities['towers']
             ],
