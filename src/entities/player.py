@@ -5,26 +5,27 @@ Player character class with animation and melee combat support.
 import pygame
 import math
 import time
+from typing import Optional
 
 from ..game.settings import *
 
 class Player:
     """Player character that can move around the battlefield and attack enemies."""
     
-    def __init__(self, x: float, y: float, sprite_manager):
+    def __init__(self, x: float, y: float, sprite_manager, health: Optional[int] = None, attack_damage: Optional[int] = None):
         """Initialize the player."""
         self.x = x
         self.y = y
         self.sprite_manager = sprite_manager
         
-        # Player stats
-        self.max_health = PLAYER_HEALTH
+        # Player stats (use provided values or defaults)
+        self.max_health = health if health is not None else PLAYER_HEALTH
         self.health = self.max_health
         self.speed = PLAYER_SPEED
         self.size = PLAYER_SIZE
         
-        # Combat stats
-        self.attack_damage = PLAYER_ATTACK_DAMAGE
+        # Combat stats (use provided values or defaults)
+        self.attack_damage = attack_damage if attack_damage is not None else PLAYER_ATTACK_DAMAGE
         self.attack_range = PLAYER_ATTACK_RANGE
         self.attack_rate = PLAYER_ATTACK_RATE
         self.knockback_force = PLAYER_ATTACK_KNOCKBACK

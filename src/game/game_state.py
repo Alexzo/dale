@@ -134,4 +134,67 @@ class GameStateManager:
             'towers_built': self.game_data['towers_built'],
             'allies_summoned': self.game_data['allies_summoned'],
             'time_elapsed': self.game_data['time_elapsed']
-        } 
+        }
+        
+    def get_saveable_game_state(self) -> Dict[str, Any]:
+        """Get complete game state that can be saved and resumed."""
+        # Save basic state data
+        state_data = {
+            'player_data': self.player_data.copy(),
+            'castle_data': self.castle_data.copy(),
+            'game_data': self.game_data.copy(),
+        }
+        
+        # Save entity positions and states (simplified for JSON storage)
+        state_data['entities'] = {
+            'towers': [
+                {
+                    'x': tower.x,
+                    'y': tower.y,
+                    'health': getattr(tower, 'health', 100)
+                } for tower in self.entities['towers']
+            ],
+            'allies': [
+                {
+                    'x': ally.x,
+                    'y': ally.y,
+                    'health': getattr(ally, 'health', 100)
+                } for ally in self.entities['allies']
+            ]
+            # Note: We don't save enemies/projectiles as they're temporary
+        }
+        
+        return state_data
+        
+    def load_game_state(self, saved_data: Dict[str, Any]):
+        """Load game state from saved data."""
+        try:
+            # Load basic game state
+            self.player_data = saved_data['game_state']['player_data'].copy()
+            self.castle_data = saved_data['game_state']['castle_data'].copy()
+            self.game_data = saved_data['game_state']['game_data'].copy()
+            
+            # Override specific values from the saved game record
+            self.game_data['current_wave'] = saved_data['wave_number']
+            self.game_data['score'] = saved_data['score']
+            self.player_data['essence'] = saved_data['essence']
+            self.castle_data['health'] = saved_data['castle_health']
+            self.game_data['time_elapsed'] = saved_data['time_elapsed']
+            
+            # Clear current entities (they'll be recreated by managers)
+            for entity_list in self.entities.values():
+                entity_list.clear()
+                
+            # Store entity data for managers to recreate
+            self.saved_entity_data = saved_data['game_state'].get('entities', {})
+            
+            print(f"✅ Loaded game state: Wave {self.game_data['current_wave']}, Score {self.game_data['score']}")
+            
+        except Exception as e:
+            print(f"❌ Failed to load game state: {e}")
+            # Fall back to reset game if loading fails
+            self.reset_game()
+            
+    def get_saved_entity_data(self) -> Dict[str, Any]:
+        """Get saved entity data for managers to recreate entities."""
+        return getattr(self, 'saved_entity_data', {}) 

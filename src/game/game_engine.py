@@ -7,14 +7,16 @@ import sys
 from typing import Dict, Any, Optional
 
 from .settings import *
+from .constants import *
 from .game_state import GameStateManager, GameState
+from .character_progression import CharacterProgression
 from ..entities.player import Player
 from ..entities.enemies import EnemyManager
 from ..entities.towers import TowerManager
 from ..entities.allies import AllyManager
 from ..entities.projectiles import ProjectileManager
 from ..ui.hud import HUD
-from ..ui.menus import MainMenu, GameOverMenu
+from ..ui.menus import MainMenu, GameOverMenu, PauseMenu
 from ..utils.sprites import SpriteManager
 from ..backend.database import GameDatabase
 
@@ -36,6 +38,7 @@ class GameEngine:
         self.state_manager = GameStateManager()
         self.sprite_manager = SpriteManager()
         self.database = GameDatabase()
+        self.character_progression = CharacterProgression(self.database)
         
         # Initialize game objects (will be set in _initialize_game_objects)
         self.player: Optional[Player] = None
@@ -48,6 +51,7 @@ class GameEngine:
         self.hud: Optional[HUD] = None
         self.main_menu: Optional[MainMenu] = None
         self.game_over_menu: Optional[GameOverMenu] = None
+        self.pause_menu: Optional[PauseMenu] = None
         
         # Game timing
         self.last_wave_time = 0.0
@@ -63,11 +67,16 @@ class GameEngine:
         
     def _initialize_game_objects(self):
         """Initialize all game objects."""
-        # Initialize player
+        # Initialize player with level-based stats
+        player_health = self.character_progression.get_character_health()
+        player_attack = self.character_progression.get_character_attack()
+        
         self.player = Player(
             self.state_manager.player_data['x'],
             self.state_manager.player_data['y'],
-            self.sprite_manager
+            self.sprite_manager,
+            health=player_health,
+            attack_damage=player_attack
         )
         
         # Initialize managers
@@ -76,10 +85,11 @@ class GameEngine:
         self.ally_manager = AllyManager(self.sprite_manager, self.state_manager)
         self.projectile_manager = ProjectileManager(self.sprite_manager)
         
-        # Initialize UI
+        # Initialize UI with character progression
         self.hud = HUD(self.state_manager)
-        self.main_menu = MainMenu()
-        self.game_over_menu = GameOverMenu()
+        self.main_menu = MainMenu(self.character_progression, self.sprite_manager, self.database)
+        self.game_over_menu = GameOverMenu(self.character_progression)
+        self.pause_menu = PauseMenu()
         
     def run(self):
         """Main game loop."""
@@ -103,15 +113,21 @@ class GameEngine:
                 self._handle_menu_events(event)
             elif self.state_manager.is_state(GameState.PLAYING):
                 self._handle_game_events(event)
+            elif self.state_manager.is_state(GameState.PAUSED):
+                self._handle_pause_events(event)
             elif self.state_manager.is_state(GameState.GAME_OVER):
                 self._handle_game_over_events(event)
                 
     def _handle_menu_events(self, event):
         """Handle events in menu state."""
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+        # Let main menu handle events first (for name editing)
+        if self.main_menu:
+            action = self.main_menu.handle_event(event)
+            if action == "new_game":
                 self._start_new_game()
-            elif event.key == pygame.K_ESCAPE:
+            elif action == "continue_game":
+                self._continue_saved_game()
+            elif action == "quit":
                 self.running = False
                 
     def _handle_game_events(self, event):
@@ -139,6 +155,18 @@ class GameEngine:
                 self._start_new_game()
             elif event.key == pygame.K_ESCAPE:
                 self.state_manager.change_state(GameState.MENU)
+                
+    def _handle_pause_events(self, event):
+        """Handle events in paused state."""
+        if self.pause_menu:
+            action = self.pause_menu.handle_event(event)
+            
+            if action == "resume":
+                self.state_manager.change_state(GameState.PLAYING)
+            elif action == "save_quit":
+                self._save_and_quit_to_menu()
+            elif action == "quit_no_save":
+                self._quit_to_menu_no_save()
                 
     def _handle_left_click(self, pos):
         """Handle left mouse click during gameplay."""
@@ -185,6 +213,9 @@ class GameEngine:
         """Update game logic."""
         if self.state_manager.is_state(GameState.PLAYING):
             self._update_gameplay(dt)
+        elif self.state_manager.is_state(GameState.PAUSED):
+            if self.pause_menu:
+                self.pause_menu.update(dt)
         elif self.state_manager.is_state(GameState.MENU):
             self.main_menu.update(dt)  # type: ignore
         elif self.state_manager.is_state(GameState.GAME_OVER):
@@ -285,11 +316,35 @@ class GameEngine:
     def _on_enemy_killed(self, enemy):
         """Handle when an enemy is killed."""
         self.state_manager.game_data['enemies_killed'] += 1
-        self.state_manager.add_score(10 * enemy.max_health)
+        self.state_manager.add_score(POINTS_PER_ENEMY_KILL * enemy.max_health)
         
         # Drop essence
         essence_amount = ESSENCE_PER_ENEMY
         self.state_manager.add_essence(essence_amount)
+        
+        # Give EXP for enemy kill
+        level_up_info = self.character_progression.add_enemy_kill_exp()
+        if level_up_info['level_up']:
+            self._handle_level_up(level_up_info)
+            
+    def _handle_level_up(self, level_up_info):
+        """Handle character level up."""
+        if level_up_info['levels_gained'] > 0:
+            new_level = level_up_info['new_level']
+            health_gained = level_up_info['levels_gained'] * CHARACTER_HEALTH_PER_LEVEL
+            attack_gained = level_up_info['levels_gained'] * CHARACTER_ATTACK_PER_LEVEL
+            
+            # Update player stats
+            if self.player:
+                # Update max health and heal to full
+                self.player.max_health = self.character_progression.get_character_health()
+                self.player.health = self.player.max_health  # Full heal on level up
+                self.player.attack_damage = self.character_progression.get_character_attack()
+                
+            # Show level up message
+            message = self.character_progression.get_level_up_message(new_level)
+            print(f"🎉 {message}")
+            print(f"💪 Gained: +{health_gained} Health, +{attack_gained} Attack!")
         
     def _check_game_conditions(self):
         """Check for win/lose conditions."""
@@ -299,18 +354,60 @@ class GameEngine:
     def _game_over(self):
         """Handle game over."""
         self.state_manager.change_state(GameState.GAME_OVER)
+        
+        # Delete saved game since the game is over
+        self.database.delete_saved_game()
+        
+        # Add session summary to save data
+        session_summary = self.character_progression.get_session_summary()
+        save_data = self.state_manager.get_save_data()
+        save_data.update({
+            'exp_gained': session_summary['exp_gained'],
+            'character_level_start': session_summary['starting_level'],
+            'character_level_end': session_summary['ending_level']
+        })
+        
         # Save game data to backend
-        self.database.save_game_session(self.state_manager.get_save_data())
+        self.database.save_game_session(save_data)
         
     def _start_new_game(self):
         """Start a new game."""
+        # Delete any existing saved game
+        self.database.delete_saved_game()
+        
+        # Reset character progression session tracking
+        self.character_progression.reset_session()
+        
         self.state_manager.reset_game()
         self.state_manager.change_state(GameState.PLAYING)
         self.last_wave_time = 0.0
         self.wave_timer = 0.0
         
-        # Reinitialize game objects with fresh state
+        # Reinitialize game objects with fresh state and current character level
         self._initialize_game_objects()
+        
+    def _continue_saved_game(self):
+        """Continue from a saved game."""
+        saved_game = self.database.load_saved_game()
+        if not saved_game:
+            print("❌ No saved game found!")
+            return
+            
+        # Reset character progression session tracking
+        self.character_progression.reset_session()
+        
+        # Load the saved game state
+        self.state_manager.load_game_state(saved_game)
+        self.state_manager.change_state(GameState.PLAYING)
+        
+        # Set wave timer state
+        self.wave_timer = saved_game['time_elapsed']
+        self.last_wave_time = self.wave_timer
+        
+        # Reinitialize game objects with saved state
+        self._initialize_game_objects()
+        
+        print(f"🎮 Continuing game from wave {saved_game['wave_number']}!")
         
     def _render(self):
         """Render the game."""
@@ -320,6 +417,10 @@ class GameEngine:
             self.main_menu.render(self.screen)  # type: ignore
         elif self.state_manager.is_state(GameState.PLAYING):
             self._render_gameplay()
+        elif self.state_manager.is_state(GameState.PAUSED):
+            self._render_gameplay()  # Show game state in background
+            if self.pause_menu:
+                self.pause_menu.render(self.screen)
         elif self.state_manager.is_state(GameState.GAME_OVER):
             self._render_gameplay()  # Show game state
             self.game_over_menu.render(self.screen)  # type: ignore
@@ -482,4 +583,47 @@ class GameEngine:
     def _cleanup(self):
         """Clean up resources."""
         pygame.quit()
-        sys.exit() 
+        sys.exit()
+        
+    def _save_and_quit_to_menu(self):
+        """Save current game progress and return to main menu."""
+        # Save complete game state for continuation
+        game_state_data = {
+            'game_state': self.state_manager.get_saveable_game_state(),
+            'wave_number': self.state_manager.game_data['current_wave'],
+            'score': self.state_manager.game_data['score'],
+            'essence': self.state_manager.player_data['essence'],
+            'castle_health': self.state_manager.castle_data['health'],
+            'time_elapsed': self.state_manager.game_data['time_elapsed']
+        }
+        
+        # Save game state to database
+        if self.database.save_game_state(game_state_data):
+            print("💾 Game saved successfully!")
+        else:
+            print("❌ Failed to save game!")
+        
+        # Also save session data to game_sessions table
+        session_summary = self.character_progression.get_session_summary()
+        save_data = self.state_manager.get_save_data()
+        save_data.update({
+            'exp_gained': session_summary['exp_gained'],
+            'character_level_start': session_summary['starting_level'],
+            'character_level_end': session_summary['ending_level']
+        })
+        
+        # Save game session data
+        self.database.save_game_session(save_data)
+        
+        # Return to main menu
+        self.state_manager.change_state(GameState.MENU)
+        print("🏠 Returned to main menu!")
+        
+    def _quit_to_menu_no_save(self):
+        """Return to main menu without saving progress."""
+        # Reset character progression session (lose progress)
+        self.character_progression.reset_session()
+        
+        # Return to main menu
+        self.state_manager.change_state(GameState.MENU)
+        print("🚪 Returned to menu without saving.") 
