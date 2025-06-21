@@ -66,6 +66,9 @@ class SpriteManager:
             else:
                 print(f"⚠️  Could not load {sprite_name}, will use default")
                 
+        # Load tower level sprites automatically
+        self._load_tower_level_sprites()
+                
         # Load environment textures
         for texture_name, file_path in environment_files.items():
             full_path = os.path.join(SPRITES_DIR, file_path)
@@ -76,6 +79,69 @@ class SpriteManager:
                 
         # Ensure we have the path textures for the enemy routes
         self._ensure_path_textures()
+        
+    def _load_tower_level_sprites(self):
+        """Load tower level sprites for the upgrade system."""
+        from ..game.settings import TOWER_SIZE
+        
+        # Try to load tower level sprites from multiple possible locations
+        tower_directories = [
+            'towers',      # Primary: assets/sprites/towers/
+            '',            # Secondary: assets/sprites/
+        ]
+        
+        # All possible naming conventions for tower levels
+        naming_patterns = [
+            'tower_level_{}',
+            'arrow_tower_level_{}',
+            'arrow_tower_lv{}',
+            'tower_{}',
+            'tower_lvl_{}'
+        ]
+        
+        loaded_count = 0
+        
+        for level in range(1, 6):  # Levels 1-5
+            sprite_loaded = False
+            
+            for directory in tower_directories:
+                if sprite_loaded:
+                    break
+                    
+                for pattern in naming_patterns:
+                    if sprite_loaded:
+                        break
+                        
+                    sprite_name = pattern.format(level)
+                    filename = f"{sprite_name}.png"
+                    
+                    if directory:
+                        full_path = os.path.join(SPRITES_DIR, directory, filename)
+                    else:
+                        full_path = os.path.join(SPRITES_DIR, filename)
+                    
+                    if os.path.exists(full_path):
+                        try:
+                            original_sprite = pygame.image.load(full_path).convert_alpha()
+                            scaled_sprite = pygame.transform.scale(original_sprite, (TOWER_SIZE, TOWER_SIZE))
+                            
+                            self.sprites[sprite_name] = scaled_sprite
+                            self.sprite_rects[sprite_name] = scaled_sprite.get_rect()
+                            
+                            print(f"✅ Loaded tower level {level}: {sprite_name} from {full_path}")
+                            loaded_count += 1
+                            sprite_loaded = True
+                            
+                        except pygame.error as e:
+                            print(f"⚠️  Error loading {full_path}: {e}")
+                            
+            if not sprite_loaded:
+                print(f"⚠️  No sprite found for tower level {level}")
+        
+        if loaded_count > 0:
+            print(f"🏗️  Loaded {loaded_count} tower level sprites")
+        else:
+            print("🏗️  No custom tower level sprites found, will use fallback system")
         
     def _load_animations(self):
         """Load character animations."""

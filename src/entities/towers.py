@@ -57,8 +57,32 @@ class ArrowTower:
         return TOWER_BASE_ATTACK_SPEED + speed_bonus_levels * TOWER_ATTACK_SPEED_BONUS_EVERY_2_LEVELS
         
     def _create_level_sprite(self) -> pygame.Surface:
-        """Create tower sprite with level-appropriate color."""
-        # Try to get base sprite first
+        """Create tower sprite with level-appropriate material."""
+        import pygame  # Ensure pygame is available in method scope
+        # First try to get level-specific sprite
+        level_sprite_name = f'tower_level_{self.level}'
+        level_sprite = self.sprite_manager.get_sprite(level_sprite_name)
+        
+        if level_sprite:
+            # Use the level-specific sprite directly
+            print(f"🎨 Using level-specific sprite: {level_sprite_name}")
+            return level_sprite.copy()
+        
+        # Try alternative naming conventions
+        alt_sprite_names = [
+            f'arrow_tower_level_{self.level}',
+            f'arrow_tower_lv{self.level}',
+            f'tower_{self.level}',
+            f'tower_lvl_{self.level}'
+        ]
+        
+        for alt_name in alt_sprite_names:
+            alt_sprite = self.sprite_manager.get_sprite(alt_name)
+            if alt_sprite:
+                print(f"🎨 Using alternative sprite: {alt_name}")
+                return alt_sprite.copy()
+        
+        # Fallback to base sprite with color tinting
         base_sprite = self.sprite_manager.get_sprite('arrow_tower')
         
         if base_sprite:
@@ -69,11 +93,12 @@ class ArrowTower:
             # Create a colored overlay
             color_overlay = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
             color_overlay.fill((*level_color, 100))  # Semi-transparent color
-            sprite.blit(color_overlay, (0, 0), special_flags=pygame.BLEND_MULT)
+            sprite.blit(color_overlay, (0, 0))
             
+            print(f"🎨 Using tinted base sprite for level {self.level}")
             return sprite
         else:
-            # Fallback sprite with level color
+            # Final fallback: procedural sprite with level color
             sprite = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
             level_color = TOWER_LEVEL_COLORS.get(self.level, TOWER_LEVEL_COLORS[1])
             
@@ -87,6 +112,14 @@ class ArrowTower:
                 (self.size//2 + 4, 16)
             ])
             
+            # Add level number
+            import pygame.font
+            font = pygame.font.Font(None, 16)
+            level_text = font.render(str(self.level), True, WHITE)
+            text_rect = level_text.get_rect(center=(self.size//2, self.size//2 + 8))
+            sprite.blit(level_text, text_rect)
+            
+            print(f"🎨 Using procedural sprite for level {self.level}")
             return sprite
             
     def can_upgrade(self) -> bool:

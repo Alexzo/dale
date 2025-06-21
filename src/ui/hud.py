@@ -41,13 +41,13 @@ class HUD:
             
         # Check summon button
         if self.summon_button_rect.collidepoint(pos):
-            if self.state_manager.spend_essence(ALLY_COST):
+            if self.state_manager.player_data['essence'] >= ALLY_COST:
                 # Signal to summon ally (handled by game engine)
                 return "summon_ally"
                 
         # Check tower button
         if self.tower_button_rect.collidepoint(pos):
-            if self.state_manager.spend_essence(ARROW_TOWER_COST):
+            if self.state_manager.player_data['essence'] >= ARROW_TOWER_COST:
                 # Signal to build tower (handled by game engine)
                 return "build_tower"
                 
@@ -55,7 +55,7 @@ class HUD:
         if self.upgrade_button_rect.collidepoint(pos) and self.selected_tower:
             if self.selected_tower.can_upgrade():
                 upgrade_cost = self.selected_tower.get_upgrade_cost()
-                if self.state_manager.spend_essence(upgrade_cost):
+                if self.state_manager.player_data['essence'] >= upgrade_cost:
                     # Signal to upgrade tower (handled by game engine)
                     return "upgrade_tower"
                 

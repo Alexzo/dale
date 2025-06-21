@@ -337,20 +337,22 @@ class GameEngine:
         
     def _try_summon_ally(self):
         """Try to summon an ally near the player."""
-        if self.state_manager.spend_essence(ALLY_COST):
-            self.ally_manager.spawn_ally_near_player(self.player.x, self.player.y)  # type: ignore
-            self.state_manager.game_data['allies_summoned'] += 1
+        if self.state_manager.player_data['essence'] >= ALLY_COST:
+            if self.state_manager.spend_essence(ALLY_COST):
+                self.ally_manager.spawn_ally_near_player(self.player.x, self.player.y)  # type: ignore
+                self.state_manager.game_data['allies_summoned'] += 1
+                print(f"🧝 Summoned ally! Essence: {self.state_manager.player_data['essence']}")
             
     def _try_build_tower(self):
         """Try to build a tower near the player."""
-        if self.state_manager.spend_essence(ARROW_TOWER_COST):
-            grid_x = int(self.player.x // TILE_SIZE)  # type: ignore
-            grid_y = int(self.player.y // TILE_SIZE)  # type: ignore
-            if self.tower_manager.try_build_tower(grid_x, grid_y):  # type: ignore
-                self.state_manager.game_data['towers_built'] += 1
-            else:
-                # Refund essence if tower couldn't be built
-                self.state_manager.add_essence(ARROW_TOWER_COST)
+        grid_x = int(self.player.x // TILE_SIZE)  # type: ignore
+        grid_y = int(self.player.y // TILE_SIZE)  # type: ignore
+        
+        # Let tower manager handle essence spending
+        if self.tower_manager.try_build_tower(grid_x, grid_y):  # type: ignore
+            print(f"🏗️ Tower built! Essence: {self.state_manager.player_data['essence']}")
+        else:
+            print("❌ Cannot build tower at this location!")
                 
     def _try_upgrade_selected_tower(self):
         """Try to upgrade the currently selected tower using U key."""

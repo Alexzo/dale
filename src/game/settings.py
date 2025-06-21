@@ -45,7 +45,7 @@ ENEMY_HEALTH = 30
 ENEMY_DAMAGE = 10
 
 # Tower settings
-TOWER_SIZE = 32
+TOWER_SIZE = 56  # Increased for optimal visibility and presence
 ARROW_TOWER_COST = 50
 ARROW_TOWER_DAMAGE = 25
 ARROW_TOWER_RANGE = 150
