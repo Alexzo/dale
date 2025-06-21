@@ -112,10 +112,18 @@ class GameStateManager:
         
     def damage_castle(self, damage: int):
         """Apply damage to the castle."""
+        old_health = self.castle_data['health']
         self.castle_data['health'] -= damage
+        
         if self.castle_data['health'] <= 0:
             self.castle_data['health'] = 0
+            print(f"🏰💥 CASTLE DESTROYED! Game Over!")
             self.change_state(GameState.GAME_OVER)
+        else:
+            # Only show feedback every 50 health lost or at critical health
+            if (old_health // 50 != self.castle_data['health'] // 50 or 
+                self.castle_data['health'] <= 100):
+                print(f"🏰⚔️ Castle under siege! Health: {self.castle_data['health']}/{self.castle_data['max_health']}")
             
     def is_castle_destroyed(self) -> bool:
         """Check if castle is destroyed."""

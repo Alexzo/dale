@@ -189,7 +189,7 @@ ENEMY_PROJECTILE_SPEED = 250     # Speed of enemy arrows (increased)
 ENEMY_PROJECTILE_DAMAGE = 5      # Damage dealt by enemy projectiles to towers
 ENEMY_TOWER_DETECTION_RANGE = 220  # Range to detect towers while moving (much increased)
 ENEMY_ATTACK_RATE = 2.5          # Attacks per second (increased again)
-ENEMY_CASTLE_SIEGE_DISTANCE = 60  # Distance from castle where enemies stop to attack
+ENEMY_CASTLE_SIEGE_DISTANCE = 250  # Distance from castle where enemies stop to attack (increased for multiple routes)
 
 # Enemy AI states
 ENEMY_STATE_MOVING = "moving"

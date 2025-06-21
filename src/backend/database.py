@@ -381,8 +381,12 @@ class GameDatabase:
             lowest_score = cursor.fetchone()[0]
             
             if score > lowest_score:
-                # Remove the lowest score
-                cursor.execute('DELETE FROM high_scores WHERE score = ? LIMIT 1', (lowest_score,))
+                # Remove the lowest score (SQLite compatible way)
+                cursor.execute('''
+                    DELETE FROM high_scores WHERE rowid = (
+                        SELECT rowid FROM high_scores WHERE score = ? LIMIT 1
+                    )
+                ''', (lowest_score,))
                 # Add the new high score
                 try:
                     cursor.execute('''

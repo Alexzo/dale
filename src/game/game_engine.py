@@ -405,10 +405,14 @@ class GameEngine:
         
         # Update entities
         self.player.update(dt)  # type: ignore
-        self.enemy_manager.update(dt, self.state_manager.castle_data)  # type: ignore
+        castle_damage = self.enemy_manager.update(dt, self.state_manager.castle_data)  # type: ignore
         self.tower_manager.update(dt)  # type: ignore
         self.ally_manager.update(dt)  # type: ignore
         self.projectile_manager.update(dt, self.state_manager.entities['projectiles'])  # type: ignore
+        
+        # Apply castle damage from enemies
+        if castle_damage > 0:
+            self.state_manager.damage_castle(castle_damage)
         
         # Handle combat
         self._handle_combat()

@@ -83,18 +83,19 @@ class Enemy:
             
         # AI behavior based on current state
         projectile = None
+        castle_damage = 0
         if self.ai_state == ENEMY_STATE_MOVING:
             self._update_moving_state(dt, towers, castle_data)
         elif self.ai_state == ENEMY_STATE_ATTACKING_TOWER:
             projectile = self._update_attacking_tower_state(dt)
         elif self.ai_state == ENEMY_STATE_ATTACKING_CASTLE:
-            self._update_attacking_castle_state(dt, castle_data)
+            castle_damage = self._update_attacking_castle_state(dt, castle_data)
         
         # Update collision rect
         self.rect.centerx = int(self.x)
         self.rect.centery = int(self.y)
         
-        return projectile  # Return any projectile created
+        return projectile, castle_damage  # Return any projectile created and castle damage
             
     def _move_towards_target(self, dt: float):
         """Move towards the current waypoint."""
@@ -178,11 +179,12 @@ class Enemy:
     def _update_attacking_castle_state(self, dt: float, castle_data=None):
         """Update enemy when attacking the castle."""
         if not castle_data or castle_data['health'] <= 0:
-            return
+            return 0
             
         # Stay at castle and keep attacking
         if self.can_attack():
-            self._attack_castle_melee(castle_data)
+            return self._attack_castle_melee(castle_data)
+        return 0
             
     def _find_nearest_tower_in_range(self, towers):
         """Find the nearest tower within detection range."""
@@ -231,10 +233,10 @@ class Enemy:
     def _attack_castle_melee(self, castle_data):
         """Attack castle with melee damage."""
         if self.can_attack():
-            # Apply damage directly to castle
-            castle_data['health'] -= self.damage
-            castle_data['health'] = max(0, castle_data['health'])
+            # Set cooldown and return damage amount to be applied by game engine
             self.attack_cooldown = 1.0 / self.attack_rate
+            return self.damage
+        return 0
             
     def can_attack(self) -> bool:
         """Check if enemy can attack."""
@@ -446,20 +448,29 @@ class EnemyManager:
         towers = self.state_manager.entities['towers']
         projectiles = self.state_manager.entities['projectiles']
         
+        total_castle_damage = 0
+        
         for enemy in enemies[:]:  # Use slice copy for safe iteration
             # Update enemy with towers and castle data for combat AI
-            projectile = enemy.update(dt, towers, castle_data)
+            projectile, castle_damage = enemy.update(dt, towers, castle_data)
             
             # Add any projectile created by the enemy
             if projectile:
                 projectiles.append(projectile)
+                
+            # Accumulate castle damage
+            total_castle_damage += castle_damage
             
             # Remove dead enemies (handled by game engine)
             if not enemy.is_alive():
                 enemies.remove(enemy)
                 
         # Handle enemy projectile collisions with towers
+        # IMPORTANT: This must be called BEFORE returning, or collisions won't be processed!
         self._handle_enemy_projectile_collisions(projectiles, towers)
+        
+        # Return total castle damage for game engine to apply
+        return total_castle_damage
         
     def _handle_enemy_projectile_collisions(self, projectiles, towers):
         """Handle collisions between enemy projectiles and towers."""
